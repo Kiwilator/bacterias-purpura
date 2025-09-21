@@ -1,13 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
+
+  <!-- A VR Purple Bacteria Museum Pilot Prototype by Sonia Rodriguez - Jose L. Rubio - D.Puyol - URJC-->
+  
 <head>
   <meta charset="utf-8" />
-  <title>Museo Nascere · A-Frame</title>
+  <title>Purple Bacteria Museum</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.0/dist/aframe-extras.min.js"></script>
   <link rel="stylesheet" href="./style.css">
 
+  <!-- ********************************* -->
+  <!--        Scripts Head      -->        
+  <!-- ********************************* -->
+  
   <!-- show-on-near: registered BEFORE the scene so A-Frame can attach it -->
   <script>
   AFRAME.registerComponent('show-on-near', {
@@ -49,11 +56,16 @@
   });
   </script>
 </head>
+
+<!-- ********************************* -->
+<!--        Assets Enviro       -->        
+<!-- ********************************* -->
+  
 <body>
   <a-scene
     renderer="colorManagement: true; physicallyCorrectLights: true; toneMapping: ACESFilmic; exposure: 1.2"
     background="color: #c6ddf1"
-    fog="type: exponential; color: #c6ddf1; density: 0.09"
+    fog="type: exponential; color: #d9d9d9; density: 0.1"
   >
     <a-assets timeout="15000">
       <a-asset-item id="mdl-cristales" src="./assets/cristales_bacterias_2.glb"></a-asset-item>
@@ -85,6 +97,10 @@
 
     <a-entity gltf-model="#mdl-techo_paredes_2" position="0 6 10" scale="1 1 1" animation-mixer></a-entity>
 
+  <!-- ********************************* -->
+  <!--        Interactividad       -->        
+  <!-- ********************************* -->
+    
     <!-- Camera + controls -->
     <!-- Move with WASD on the RIG so #rig position actually changes -->
     <a-entity id="rig" position="0 1.6 4" wasd-controls>
@@ -96,6 +112,10 @@
     -->
   </a-scene>
 
+  <!-- ********************************* -->
+  <!--        Scripts Footer      -->        
+  <!-- ********************************* -->
+  
   <script>
   // Play background sound on first user interaction (autoplay policies)
   function playSound() {
@@ -108,3 +128,9 @@
   </script>
 </body>
 </html>
+
+
+
+
+
+
