@@ -72,43 +72,47 @@ AFRAME.registerComponent('show-on-near', {
     distance: {type: 'number', default: 4}
   },
   init: function () {
-    // Start invisible but rendered
-    this.el.setAttribute('visible', true);
+    this.isVisible = false; // start hidden
+    this.el.setAttribute('visible', true); // must render for opacity to work
     this.el.object3D.traverse(node => {
       if (node.material) {
         node.material.transparent = true;
         node.material.opacity = 0;
       }
     });
-    this.hasFadedIn = false;
   },
   tick: function () {
-    if (!this.data.target || this.hasFadedIn) return;
-    const planet = this.el;
+    if (!this.data.target) return;
     const camPos = this.data.target.object3D.position;
-    const planetPos = planet.object3D.position;
+    const planetPos = this.el.object3D.position;
     const dist = camPos.distanceTo(planetPos);
 
-    if (dist < this.data.distance) {
-      this.hasFadedIn = true;
-      // Animate fade-in on all child materials
-      planet.object3D.traverse(node => {
-        if (node.material) {
-          new TWEEN.Tween({opacity: 0})
-            .to({opacity: 1}, 2000)
-            .easing(TWEEN.Easing.Quadratic.InOut)
-            .onUpdate(o => {
-              node.material.opacity = o.opacity;
-            })
-            .start();
-        }
-      });
+    if (dist < this.data.distance && !this.isVisible) {
+      this.fadeTo(1); // fade in
+      this.isVisible = true;
+    } else if (dist >= this.data.distance && this.isVisible) {
+      this.fadeTo(0); // fade out
+      this.isVisible = false;
     }
+  },
+  fadeTo: function (targetOpacity) {
+    this.el.object3D.traverse(node => {
+      if (node.material) {
+        new TWEEN.Tween({opacity: node.material.opacity})
+          .to({opacity: targetOpacity}, 2000)
+          .easing(TWEEN.Easing.Quadratic.InOut)
+          .onUpdate(o => {
+            node.material.opacity = o.opacity;
+          })
+          .start();
+      }
+    });
   }
 });
   </script>
 </body>
 </html>
+
 
 
 
