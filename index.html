@@ -73,20 +73,18 @@ AFRAME.registerComponent('show-on-near', {
     distance: {type: 'number', default: 4}
   },
   init: function () {
-    this.isVisible = false; // start hidden
-    this.el.object3D.traverse(node => {
-      if (node.material) {
-        node.material.transparent = true;
-        node.material.opacity = 0;
-      }
+    this.isVisible = false;
+    this.el.addEventListener("model-loaded", () => {
+      this.el.object3D.traverse(node => {
+        if (node.material) {
+          node.material.transparent = true;
+          node.material.opacity = 0;
+        }
+      });
     });
   },
   tick: function () {
     if (!this.data.target) return;
-
-    // must call TWEEN.update() for animations to progress
-    if (window.TWEEN) TWEEN.update();
-
     const camPos = this.data.target.object3D.position;
     const planetPos = new THREE.Vector3();
     this.el.object3D.getWorldPosition(planetPos);
@@ -94,30 +92,26 @@ AFRAME.registerComponent('show-on-near', {
     const dist = camPos.distanceTo(planetPos);
 
     if (dist < this.data.distance && !this.isVisible) {
-      this.fadeTo(1);
+      this.fadeTo(1);   // fade in
       this.isVisible = true;
     } else if (dist >= this.data.distance && this.isVisible) {
-      this.fadeTo(0);
+      this.fadeTo(0);   // fade out
       this.isVisible = false;
     }
   },
-  fadeTo: function (targetOpacity) {
-    this.el.object3D.traverse(node => {
-      if (node.material) {
-        new TWEEN.Tween({opacity: node.material.opacity})
-          .to({opacity: targetOpacity}, 2000)
-          .easing(TWEEN.Easing.Quadratic.InOut)
-          .onUpdate(o => {
-            node.material.opacity = o.opacity;
-          })
-          .start();
-      }
+  fadeTo: function (opacity) {
+    this.el.setAttribute("animation__fade", {
+      property: "object3D.children[0].material.opacity",
+      to: opacity,
+      dur: 1000,
+      easing: "easeInOutQuad"
     });
   }
 });
   </script>
 </body>
 </html>
+
 
 
 
