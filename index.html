@@ -31,15 +31,14 @@
     <!-- Models -->
     <!--<a-entity gltf-model="#mdl-techo" position="-1 6 10" scale="1 1 1"></a-entity> -->
     <a-entity gltf-model="#mdl-cristales" position="0 6 10" scale="1 1 1" animation-mixer></a-entity>
-<a-entity id="planet"
+    <a-entity id="planet"
           gltf-model="#planeta_museo_exterior" 
           position="3 2 0" 
           scale="1 1 1"
-          material="transparent: true; opacity: 0"
-          visible="false"
+          show-on-near="target: #rig; distance: 4"
           animation__rotation="property: rotation; to: 0 360 0; loop: true; dur: 20000; easing: linear"
           animation__float="property: position; dir: alternate; dur: 4000; easing: easeInOutSine; loop: true; to: 3 2.3 0">
-</a-entity>
+    </a-entity>
     <a-entity gltf-model="#mdl-techo_paredes_2" position="0 6 10" scale="1 1 1" animation-mixer></a-entity>
 
     <!-- Camera + controls -->
@@ -69,25 +68,40 @@
 
 AFRAME.registerComponent('show-on-near', {
   schema: {
-    target: {type: 'selector'},   // e.g. the camera rig
-    distance: {type: 'number', default: 4} // how close the user must be
+    target: {type: 'selector'},
+    distance: {type: 'number', default: 4}
+  },
+  init: function () {
+    // Start invisible but rendered
+    this.el.setAttribute('visible', true);
+    this.el.object3D.traverse(node => {
+      if (node.material) {
+        node.material.transparent = true;
+        node.material.opacity = 0;
+      }
+    });
+    this.hasFadedIn = false;
   },
   tick: function () {
-    if (!this.data.target) return;
+    if (!this.data.target || this.hasFadedIn) return;
     const planet = this.el;
     const camPos = this.data.target.object3D.position;
     const planetPos = planet.object3D.position;
     const dist = camPos.distanceTo(planetPos);
 
-    // If user is close enough and planet is hidden, fade in
-    if (dist < this.data.distance && !planet.getAttribute('visible')) {
-      planet.setAttribute('visible', true);
-      planet.setAttribute('animation__fadein', {
-        property: 'material.opacity',
-        from: 0,
-        to: 1,
-        dur: 2000,
-        easing: 'easeInOutQuad'
+    if (dist < this.data.distance) {
+      this.hasFadedIn = true;
+      // Animate fade-in on all child materials
+      planet.object3D.traverse(node => {
+        if (node.material) {
+          new TWEEN.Tween({opacity: 0})
+            .to({opacity: 1}, 2000)
+            .easing(TWEEN.Easing.Quadratic.InOut)
+            .onUpdate(o => {
+              node.material.opacity = o.opacity;
+            })
+            .start();
+        }
       });
     }
   }
@@ -95,6 +109,7 @@ AFRAME.registerComponent('show-on-near', {
   </script>
 </body>
 </html>
+
 
 
 
