@@ -8,24 +8,20 @@
   <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.0/dist/aframe-extras.min.js"></script>
   <link rel="stylesheet" href="./style.css">
 
-  <!-- Register BEFORE the scene so A-Frame can attach it -->
+  <!-- show-on-near: registered BEFORE the scene so A-Frame can attach it -->
   <script>
   AFRAME.registerComponent('show-on-near', {
     schema: {
-      target: { type: 'selector' },              // entity to compare distance with (e.g. #rig)
+      target: { type: 'selector' },              // e.g. #rig
       distance: { type: 'number', default: 4 },  // meters
       debug: { type: 'selector', default: null } // optional <a-entity text> for debugging
     },
     init() {
       this._visible = false;
-      // Hide immediately (also re-hide when model loads)
-      this.el.object3D.visible = false;
-
-      // Vectors reused per-frame
+      this.el.object3D.visible = false; // start hidden
       this._a = new THREE.Vector3();
       this._b = new THREE.Vector3();
-
-      // If this entity loads a model later, keep it hidden until near
+      // If a GLTF loads later, keep it hidden until near
       this.el.addEventListener('model-loaded', () => {
         this.el.object3D.visible = false;
         this._visible = false;
@@ -38,7 +34,6 @@
       this.el.object3D.getWorldPosition(this._a);
       t.object3D.getWorldPosition(this._b);
       const d = this._a.distanceTo(this._b);
-
       const shouldShow = d <= this.data.distance;
 
       if (shouldShow !== this._visible) {
@@ -46,7 +41,7 @@
         this._visible = shouldShow;
       }
 
-      // Optional on-screen debug
+      // Optional on-screen debug — only if you wire a #debug entity
       if (this.data.debug && this.data.debug.components && this.data.debug.components.text) {
         this.data.debug.setAttribute('text', 'value', `dist: ${d.toFixed(2)}m (<= ${this.data.distance})`);
       }
@@ -83,7 +78,7 @@
               gltf-model="#planeta_museo_exterior"
               position="3 2 0"
               scale="1 1 1"
-              show-on-near="target: #rig; distance: 4; debug: #debug"
+              show-on-near="target: #rig; distance: 4"
               animation__rotation="property: rotation; to: 5 5 600; loop: true; dur: 20000; easing: linear"
               animation__float="property: position; dir: alternate; dur: 4000; easing: easeInOutSine; loop: true; to: 3 2.05 0">
     </a-entity>
@@ -91,12 +86,14 @@
     <a-entity gltf-model="#mdl-techo_paredes_2" position="0 6 10" scale="1 1 1" animation-mixer></a-entity>
 
     <!-- Camera + controls -->
-    <a-entity id="rig" position="0 1.6 4">
-      <a-entity camera look-controls wasd-controls cursor="rayOrigin: mouse"></a-entity>
+    <!-- Move with WASD on the RIG so #rig position actually changes -->
+    <a-entity id="rig" position="0 1.6 4" wasd-controls>
+      <a-entity camera look-controls cursor="rayOrigin: mouse"></a-entity>
     </a-entity>
 
-    <!-- Optional debug readout (distance text) -->
+    <!-- If you want the distance readout again, uncomment this and add ; debug: #debug above
     <a-entity id="debug" position="0 2 -2" text="value: ; align: center; color: #000"></a-entity>
+    -->
   </a-scene>
 
   <script>
