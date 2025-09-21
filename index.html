@@ -31,15 +31,13 @@
     <!-- Models -->
     <!--<a-entity gltf-model="#mdl-techo" position="-1 6 10" scale="1 1 1"></a-entity> -->
     <a-entity gltf-model="#mdl-cristales" position="0 6 10" scale="1 1 1" animation-mixer></a-entity>
-<a-entity id="planet-wrapper" position="3 2 0">
-  <a-entity id="planet"
+    <a-entity id="planet"
             gltf-model="#planeta_museo_exterior"
             scale="1 1 1"
             show-on-near="target: #rig; distance: 4"
             animation__rotation="property: rotation; to: 0 360 0; loop: true; dur: 20000; easing: linear"
             animation__float="property: position; dir: alternate; dur: 4000; easing: easeInOutSine; loop: true; to: 0 0.3 0">
   </a-entity>
-</a-entity>
     <a-entity gltf-model="#mdl-techo_paredes_2" position="0 6 10" scale="1 1 1" animation-mixer></a-entity>
 
     <!-- Camera + controls -->
@@ -67,94 +65,10 @@
     playSound();
   });
 
-AFRAME.registerComponent("show-on-near", {
-  schema: {
-    // Optional: if you pass a target, we’ll measure to that; otherwise we use the active camera.
-    target: { type: "selector", default: null },
-    distance: { type: "number", default: 4 }
-  },
-  init: function () {
-    this.isVisible = false;
-    this.materials = [];
-    this.THREE = AFRAME.THREE; // safer than relying on global THREE
-
-    // When the model loads, collect ALL materials (including arrays) and set opacity to 0
-    this.el.addEventListener("model-loaded", () => {
-      this.materials.length = 0;
-      this.el.object3D.traverse((node) => {
-        if (!node.isMesh || !node.material) return;
-
-        const pushMat = (m) => {
-          // Ensure we can actually fade it
-          m.transparent = true;
-          // Helps avoid z-sorting artifacts in some cases while fading
-          m.depthWrite = false;
-          m.opacity = 0;
-          m.needsUpdate = true;
-          this.materials.push(m);
-        };
-
-        if (Array.isArray(node.material)) {
-          node.material.forEach(pushMat);
-        } else {
-          pushMat(node.material);
-        }
-      });
-    });
-  },
-  tick: function () {
-    if (this.materials.length === 0) return;
-
-    const camPos = new this.THREE.Vector3();
-    const objPos = new this.THREE.Vector3();
-
-    // Use target if provided; otherwise use active camera
-    if (this.data.target) {
-      this.data.target.object3D.getWorldPosition(camPos);
-    } else if (this.el.sceneEl && this.el.sceneEl.camera) {
-      this.el.sceneEl.camera.getWorldPosition(camPos);
-    } else {
-      return; // no camera yet
-    }
-    this.el.object3D.getWorldPosition(objPos);
-
-    const dist = camPos.distanceTo(objPos);
-    if (dist < this.data.distance && !this.isVisible) {
-      this.fadeTo(1);
-      this.isVisible = true;
-    } else if (dist >= this.data.distance && this.isVisible) {
-      this.fadeTo(0);
-      this.isVisible = false;
-    }
-  },
-  fadeTo: function (targetOpacity) {
-    const duration = 1000;
-    const startTime = performance.now();
-
-    // If we’re fading back in, re-enable the write just at the end for correctness
-    const animate = (time) => {
-      const t = Math.min((time - startTime) / duration, 1);
-      for (const mat of this.materials) {
-        const start = mat.opacity;
-        mat.opacity = start + (targetOpacity - start) * t;
-        mat.needsUpdate = true;
-      }
-      if (t < 1) {
-        requestAnimationFrame(animate);
-      } else {
-        const finishingToOne = targetOpacity >= 1;
-        for (const mat of this.materials) {
-          mat.depthWrite = finishingToOne; // restore when fully opaque
-          mat.needsUpdate = true;
-        }
-      }
-    };
-    requestAnimationFrame(animate);
-  }
-});
   </script>
 </body>
 </html>
+
 
 
 
