@@ -31,13 +31,15 @@
     <!-- Models -->
     <!--<a-entity gltf-model="#mdl-techo" position="-1 6 10" scale="1 1 1"></a-entity> -->
     <a-entity gltf-model="#mdl-cristales" position="0 6 10" scale="1 1 1" animation-mixer></a-entity>
-    <a-entity id="planet"
+<a-entity id="planet"
           gltf-model="#planeta_museo_exterior" 
           position="3 2 0" 
           scale="1 1 1"
+          material="transparent: true; opacity: 0"
+          visible="false"
           animation__rotation="property: rotation; to: 0 360 0; loop: true; dur: 20000; easing: linear"
           animation__float="property: position; dir: alternate; dur: 4000; easing: easeInOutSine; loop: true; to: 3 2.3 0">
-    </a-entity>
+</a-entity>
     <a-entity gltf-model="#mdl-techo_paredes_2" position="0 6 10" scale="1 1 1" animation-mixer></a-entity>
 
     <!-- Camera + controls -->
@@ -64,9 +66,36 @@
   document.addEventListener("click", function () {
     playSound();
   });
+
+AFRAME.registerComponent('show-on-near', {
+  schema: {
+    target: {type: 'selector'},   // e.g. the camera rig
+    distance: {type: 'number', default: 4} // how close the user must be
+  },
+  tick: function () {
+    if (!this.data.target) return;
+    const planet = this.el;
+    const camPos = this.data.target.object3D.position;
+    const planetPos = planet.object3D.position;
+    const dist = camPos.distanceTo(planetPos);
+
+    // If user is close enough and planet is hidden, fade in
+    if (dist < this.data.distance && !planet.getAttribute('visible')) {
+      planet.setAttribute('visible', true);
+      planet.setAttribute('animation__fadein', {
+        property: 'material.opacity',
+        from: 0,
+        to: 1,
+        dur: 2000,
+        easing: 'easeInOutQuad'
+      });
+    }
+  }
+});
   </script>
 </body>
 </html>
+
 
 
 
