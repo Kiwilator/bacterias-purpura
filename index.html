@@ -67,50 +67,66 @@
     playSound();
   });
 
-AFRAME.registerComponent('show-on-near', {
-  schema: {
-    target: {type: 'selector'},
-    distance: {type: 'number', default: 4}
-  },
-  init: function () {
-    this.isVisible = false;
-    this.el.addEventListener("model-loaded", () => {
-      this.el.object3D.traverse(node => {
-        if (node.material) {
-          node.material.transparent = true;
-          node.material.opacity = 0;
-        }
-      });
-    });
-  },
-  tick: function () {
-    if (!this.data.target) return;
-    const camPos = this.data.target.object3D.position;
-    const planetPos = new THREE.Vector3();
-    this.el.object3D.getWorldPosition(planetPos);
-
-    const dist = camPos.distanceTo(planetPos);
-
-    if (dist < this.data.distance && !this.isVisible) {
-      this.fadeTo(1);   // fade in
-      this.isVisible = true;
-    } else if (dist >= this.data.distance && this.isVisible) {
-      this.fadeTo(0);   // fade out
+  AFRAME.registerComponent("show-on-near", {
+    schema: {
+      target: { type: "selector" },
+      distance: { type: "number", default: 4 }
+    },
+    init: function () {
       this.isVisible = false;
+      this.materials = [];
+
+      // When the model loads, grab all materials and set opacity = 0
+      this.el.addEventListener("model-loaded", () => {
+        this.el.object3D.traverse(node => {
+          if (node.material) {
+            node.material.transparent = true;
+            node.material.opacity = 0;
+            this.materials.push(node.material);
+          }
+        });
+      });
+    },
+    tick: function () {
+      if (!this.data.target || this.materials.length === 0) return;
+
+      const camPos = new THREE.Vector3();
+      const planetPos = new THREE.Vector3();
+
+      this.data.target.object3D.getWorldPosition(camPos);
+      this.el.object3D.getWorldPosition(planetPos);
+
+      const dist = camPos.distanceTo(planetPos);
+
+      if (dist < this.data.distance && !this.isVisible) {
+        this.fadeTo(1);   // fade in
+        this.isVisible = true;
+      } else if (dist >= this.data.distance && this.isVisible) {
+        this.fadeTo(0);   // fade out
+        this.isVisible = false;
+      }
+    },
+    fadeTo: function (targetOpacity) {
+      this.materials.forEach(mat => {
+        const start = mat.opacity;
+        const end = targetOpacity;
+        const duration = 1000;
+        const startTime = performance.now();
+
+        const animate = (time) => {
+          const t = Math.min((time - startTime) / duration, 1);
+          mat.opacity = start + (end - start) * t;
+          if (t < 1) requestAnimationFrame(animate);
+        };
+
+        requestAnimationFrame(animate);
+      });
     }
-  },
-  fadeTo: function (opacity) {
-    this.el.setAttribute("animation__fade", {
-      property: "object3D.children[0].material.opacity",
-      to: opacity,
-      dur: 1000,
-      easing: "easeInOutQuad"
-    });
-  }
-});
+  });
   </script>
 </body>
 </html>
+
 
 
 
