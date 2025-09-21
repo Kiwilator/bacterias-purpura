@@ -67,8 +67,44 @@
   });
 
   </script>
+
+<script>
+AFRAME.registerComponent('show-on-near', {
+  schema: {
+    target: { type: 'selector' },      // e.g. #rig
+    distance: { type: 'number', default: 4 }, // meters
+    debug: { type: 'selector', default: null } // optional: an <a-entity text> to show distance
+  },
+  init() {
+    this._visible = false;
+    this.el.object3D.visible = false; // start hidden
+    this._a = new THREE.Vector3();
+    this._b = new THREE.Vector3();
+  },
+  tick() {
+    const t = this.data.target;
+    if (!t || !t.object3D) return;
+
+    this.el.object3D.getWorldPosition(this._a);
+    t.object3D.getWorldPosition(this._b);
+    const d = this._a.distanceTo(this._b);
+
+    const shouldShow = d <= this.data.distance;
+    if (shouldShow !== this._visible) {
+      this.el.object3D.visible = shouldShow;
+      this._visible = shouldShow;
+    }
+
+    // optional on-screen debug
+    if (this.data.debug && this.data.debug.components.text) {
+      this.data.debug.setAttribute('text', 'value', `dist: ${d.toFixed(2)}m (<= ${this.data.distance})`);
+    }
+  }
+});
+</script>
 </body>
 </html>
+
 
 
 
