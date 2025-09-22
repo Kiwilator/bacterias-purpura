@@ -107,44 +107,42 @@
       Array.from(this.el.children).forEach(child => this.setOpacityForEl(child, value));
     },
 
-    setOpacityForEl(el, value) {
-      // Meshes
-      const mesh = el.getObject3D('mesh');
-      if (mesh) {
-        mesh.traverse(node => {
-          if (node.isMesh && node.material) {
-            const mats = Array.isArray(node.material) ? node.material : [node.material];
-            mats.forEach(m => {
-              const base = this._base.get(m) ?? 1;
-              const v = base * value;
-              m.transparent = v < 1 || base < 1;
-              m.opacity = v;
-              if (m.alphaTest) m.alphaTest = Math.min(m.alphaTest, 0.01);
-              m.needsUpdate = true;
-            });
-          }
+setOpacityForEl(el, value) {
+  // Meshes
+  const mesh = el.getObject3D('mesh');
+  if (mesh) {
+    mesh.traverse(node => {
+      if (node.isMesh && node.material) {
+        const mats = Array.isArray(node.material) ? node.material : [node.material];
+        mats.forEach(m => {
+          const base = this._base.get(m) ?? 1;
+          const v = base * value;
+          m.transparent = v < 1 || base < 1;
+          m.opacity = v;
+          if (m.alphaTest) m.alphaTest = Math.min(m.alphaTest, 0.01);
+          m.needsUpdate = true;
         });
       }
+    });
+  }
 
-      // Material component (e.g., <a-plane>)
-      if (el.components && el.components.material) {
-        const base = this._base.get(el) ?? 1;
-        const v = base * value;
-        el.setAttribute('material', 'transparent', v < 1 || base < 1);
-        el.setAttribute('material', 'opacity', v);
-      }
+  // Material component (e.g., <a-plane>)
+  if (el.components && el.components.material) {
+    const base = this._base.get(el) ?? 1;
+    const v = base * value;
+    el.setAttribute('material', 'transparent', v < 1 || base < 1);
+    el.setAttribute('material', 'opacity', v);
+  }
 
-      // Text component
-      if (el.components && el.components.text && el.__textBaseKey) {
-        const base = this._base.get(el.__textBaseKey) ?? 1;
-        const v = base * value;
-        const current = el.getAttribute('text') || {};
-        el.setAttribute('text', Object.assign({}, current, { opacity: v }));
-      }
+  // Text component (fade always 0 → 1)
+  if (el.components && el.components.text) {
+    const current = el.getAttribute('text') || {};
+    el.setAttribute('text', Object.assign({}, current, { opacity: value }));
+  }
 
-      // Recurse into children
-      Array.from(el.children).forEach(child => this.setOpacityForEl(child, value));
-    }
+  // Recurse into children
+  Array.from(el.children).forEach(child => this.setOpacityForEl(child, value));
+}
   });
   </script>
 </head>
@@ -234,3 +232,4 @@ Much later came the cyanobacteria with the “modern” form of photosynthesis t
   </script>
 </body>
 </html>
+
