@@ -18,21 +18,22 @@
   <script>
   AFRAME.registerComponent('show-on-near', {
     schema: {
-      target: { type: 'selector' },              // e.g. #rig
+      target:   { type: 'selector' },            // e.g. #rig
       distance: { type: 'number', default: 4 },  // meters
-      duration: { type: 'number', default: 1000 } // fade duration in ms
+      duration: { type: 'number', default: 1500 } // fade duration (ms)
     },
     init() {
-      this._visible = false;
       this._opacity = 0;
-      this.el.object3D.visible = true; // keep in scene but transparent
       this._a = new THREE.Vector3();
       this._b = new THREE.Vector3();
 
-      // Prepare materials once model is loaded
-      this.el.addEventListener('model-loaded', () => {
-        this.setOpacity(0);
-      });
+      // Asegura que esté en escena (para poder animar opacity) pero transparente.
+      if (this.el.object3D) this.el.object3D.visible = true;
+      this.applyOpacity(0);
+
+      // Si carga un modelo más tarde, vuelve a forzar opacidad 0.
+      this.el.addEventListener('model-loaded', () => this.applyOpacity(0));
+      this.el.addEventListener('object3dset',   () => this.applyOpacity(0));
     },
     tick(time, delta) {
       const t = this.data.target;
@@ -41,26 +42,44 @@
       this.el.object3D.getWorldPosition(this._a);
       t.object3D.getWorldPosition(this._b);
       const d = this._a.distanceTo(this._b);
-      const shouldShow = d <= this.data.distance;
 
-      // compute fade step
-      const step = delta / this.data.duration;
+      const goingIn  = d <= this.data.distance;
+      const step     = (delta / this.data.duration) * (goingIn ? 1 : -1);
+      const next     = THREE.MathUtils.clamp(this._opacity + step, 0, 1);
 
-      if (shouldShow) {
-        this._opacity = Math.min(1, this._opacity + step);
-      } else {
-        this._opacity = Math.max(0, this._opacity - step);
+      if (next !== this._opacity) {
+        this._opacity = next;
+        this.applyOpacity(this._opacity);
       }
-      this.setOpacity(this._opacity);
     },
-    setOpacity(value) {
-      if (!this.el.getObject3D('mesh')) return;
-      this.el.getObject3D('mesh').traverse(node => {
-        if (node.isMesh) {
-          node.material.transparent = true;
-          node.material.opacity = value;
-        }
-      });
+    applyOpacity(value) {
+      // 1) GLTF / Meshes
+      const mesh = this.el.getObject3D('mesh');
+      if (mesh) {
+        mesh.traverse(node => {
+          if (node.isMesh && node.material) {
+            // Soporta materiales múltiples
+            const mats = Array.isArray(node.material) ? node.material : [node.material];
+            mats.forEach(m => {
+              m.transparent = true;
+              m.opacity = value;
+              // Si tu material usa alphaTest, baja el umbral para permitir fade
+              if (m.alphaTest) m.alphaTest = Math.min(m.alphaTest, 0.01);
+            });
+          }
+        });
+      }
+      // 2) Material component (si existe en la entidad)
+      if (this.el.components.material) {
+        this.el.setAttribute('material', 'transparent', true);
+        this.el.setAttribute('material', 'opacity', value);
+      }
+      // 3) Texto (a-text / text component)
+      if (this.el.components.text) {
+        // El componente text soporta 'opacity'
+        const current = this.el.getAttribute('text') || {};
+        this.el.setAttribute('text', Object.assign({}, current, { opacity: value }));
+      }
     }
   });
   </script>
@@ -93,21 +112,29 @@
     <!-- Models -->
     <a-entity gltf-model="#mdl-cristales" position="0 6 10" scale="1 1 1" animation-mixer></a-entity>
 
-    <!-- Planet: fades in when near, fades out when far -->
+    <!-- Planet: fade in when near, fade out when far -->
     <a-entity id="planet"
               gltf-model="#planeta_museo_exterior"
               position="3 2 0"
               scale="1 1 1"
-              show-on-near="target: #rig; distance: 4; duration: 1500"
+              show-on-near="target: #rig; distance: 4; duration: 1200"
               animation__rotation="property: rotation; to: 5 5 600; loop: true; dur: 20000; easing: linear"
               animation__float="property: position; dir: alternate; dur: 4000; easing: easeInOutSine; loop: true; to: 3 2.05 0">
     </a-entity>
 
+    <!-- Texto explicativo: mismo comportamiento de aparición/desaparición -->
+    <a-entity id="planet-text"
+              position="4.5 1.6 0"  <!-- ajusta a tu gusto -->
+              rotation="0 -20 0"
+              text="value: ; width: 2.8; wrapCount: 42; align: left; color: #ffffff; opacity: 0"
+              show-on-near="target: #rig; distance: 4; duration: 1200">
+    </a-entity>
+
     <a-entity gltf-model="#mdl-techo_paredes_2" position="0 6 10" scale="1 1 1" animation-mixer></a-entity>
 
-  <!-- ********************************* -->
-  <!--        Interactividad       -->        
-  <!-- ********************************* -->
+    <!-- ********************************* -->
+    <!--        Interactividad       -->        
+    <!-- ********************************* -->
     
     <!-- Camera + controls -->
     <a-entity id="rig" position="0 1.6 4" wasd-controls>
@@ -128,6 +155,19 @@
     }
   }
   document.addEventListener("click", playSound);
+
+  // Asignar el texto largo por JS para evitar escapar ':' y ';'
+  const txt = `Over three billion years ago, Earth was a very different place: young oceans, almost no oxygen, and layers of water where light filtered gently down. In that setting, life began to use sunlight in simple ways.
+
+Among those early light-users were the purple bacteria. They carry out photosynthesis without releasing oxygen. Instead of splitting water, they use substances like hydrogen sulphide or organic compounds. That’s why they thrive where there is light but little oxygen—in microbial mats and stratified waters. They offer a glimpse of what photosynthesis may have looked like before the version that oxygenated the planet.
+
+Much later came the cyanobacteria with the “modern” form of photosynthesis that does release oxygen, triggering the Great Oxidation around 2.4 billion years ago—a leap that changed the air and the oceans for good.`;
+
+  const textEl = document.querySelector('#planet-text');
+  if (textEl) {
+    const current = textEl.getAttribute('text') || {};
+    textEl.setAttribute('text', Object.assign({}, current, { value: txt }));
+  }
   </script>
 </body>
 </html>
