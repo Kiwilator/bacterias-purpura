@@ -15,26 +15,26 @@
   <!--        Scripts Head      -->        
   <!-- ********************************* -->
   
-  <!-- show-on-near: registered BEFORE the scene so A-Frame can attach it -->
   <script>
   AFRAME.registerComponent('show-on-near', {
     schema: {
       target: { type: 'selector' },              // e.g. #rig
       distance: { type: 'number', default: 4 },  // meters
-      debug: { type: 'selector', default: null } // optional <a-entity text> for debugging
+      duration: { type: 'number', default: 1000 } // fade duration in ms
     },
     init() {
       this._visible = false;
-      this.el.object3D.visible = false; // start hidden
+      this._opacity = 0;
+      this.el.object3D.visible = true; // keep in scene but transparent
       this._a = new THREE.Vector3();
       this._b = new THREE.Vector3();
-      // If a GLTF loads later, keep it hidden until near
+
+      // Prepare materials once model is loaded
       this.el.addEventListener('model-loaded', () => {
-        this.el.object3D.visible = false;
-        this._visible = false;
+        this.setOpacity(0);
       });
     },
-    tick() {
+    tick(time, delta) {
       const t = this.data.target;
       if (!t || !t.object3D) return;
 
@@ -43,15 +43,24 @@
       const d = this._a.distanceTo(this._b);
       const shouldShow = d <= this.data.distance;
 
-      if (shouldShow !== this._visible) {
-        this.el.object3D.visible = shouldShow;
-        this._visible = shouldShow;
-      }
+      // compute fade step
+      const step = delta / this.data.duration;
 
-      // Optional on-screen debug — only if you wire a #debug entity
-      if (this.data.debug && this.data.debug.components && this.data.debug.components.text) {
-        this.data.debug.setAttribute('text', 'value', `dist: ${d.toFixed(2)}m (<= ${this.data.distance})`);
+      if (shouldShow) {
+        this._opacity = Math.min(1, this._opacity + step);
+      } else {
+        this._opacity = Math.max(0, this._opacity - step);
       }
+      this.setOpacity(this._opacity);
+    },
+    setOpacity(value) {
+      if (!this.el.getObject3D('mesh')) return;
+      this.el.getObject3D('mesh').traverse(node => {
+        if (node.isMesh) {
+          node.material.transparent = true;
+          node.material.opacity = value;
+        }
+      });
     }
   });
   </script>
@@ -82,15 +91,14 @@
     <a-entity light="type: directional; intensity: 2.2" position="2 4 3"></a-entity>
 
     <!-- Models -->
-    <!-- <a-entity gltf-model="#mdl-techo" position="-1 6 10" scale="1 1 1"></a-entity> -->
     <a-entity gltf-model="#mdl-cristales" position="0 6 10" scale="1 1 1" animation-mixer></a-entity>
 
-    <!-- Planet: starts hidden; shows only when the rig is within 'distance' meters -->
+    <!-- Planet: fades in when near, fades out when far -->
     <a-entity id="planet"
               gltf-model="#planeta_museo_exterior"
               position="3 2 0"
               scale="1 1 1"
-              show-on-near="target: #rig; distance: 4"
+              show-on-near="target: #rig; distance: 4; duration: 1500"
               animation__rotation="property: rotation; to: 5 5 600; loop: true; dur: 20000; easing: linear"
               animation__float="property: position; dir: alternate; dur: 4000; easing: easeInOutSine; loop: true; to: 3 2.05 0">
     </a-entity>
@@ -102,14 +110,9 @@
   <!-- ********************************* -->
     
     <!-- Camera + controls -->
-    <!-- Move with WASD on the RIG so #rig position actually changes -->
     <a-entity id="rig" position="0 1.6 4" wasd-controls>
       <a-entity camera look-controls cursor="rayOrigin: mouse"></a-entity>
     </a-entity>
-
-    <!-- If you want the distance readout again, uncomment this and add ; debug: #debug above
-    <a-entity id="debug" position="0 2 -2" text="value: ; align: center; color: #000"></a-entity>
-    -->
   </a-scene>
 
   <!-- ********************************* -->
@@ -128,9 +131,3 @@
   </script>
 </body>
 </html>
-
-
-
-
-
-
