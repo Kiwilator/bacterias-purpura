@@ -15,27 +15,21 @@
   <!--        Scripts Head      -->        
   <!-- ********************************* -->
   
-  <!-- show-on-near: registered BEFORE the scene so A-Frame can attach it -->
   <script>
   AFRAME.registerComponent('show-on-near', {
     schema: {
-      target: { type: 'selector' },              // e.g. #rig
-      distance: { type: 'number', default: 4 },  // meters
-      duration: { type: 'number', default: 1000 } // fade duration in ms
+      target:   { type: 'selector' },
+      distance: { type: 'number', default: 4 },
+      duration: { type: 'number', default: 1200 }
     },
     init() {
-      this._visible = false;
-      this._opacity = 0.0;
-      this._targetOpacity = 0.0;
+      this._opacity = 0;
       this._a = new THREE.Vector3();
       this._b = new THREE.Vector3();
-      this._lastTime = null;
-      this.el.object3D.visible = true; // keep visible, control via opacity
-      this.applyOpacity(0.0);
-
-      this.el.addEventListener('model-loaded', () => {
-        this.applyOpacity(0.0);
-      });
+      if (this.el.object3D) this.el.object3D.visible = true;
+      this.applyOpacity(0);
+      this.el.addEventListener('model-loaded', () => this.applyOpacity(0));
+      this.el.addEventListener('object3dset',   () => this.applyOpacity(0));
     },
     tick(time, delta) {
       const t = this.data.target;
@@ -44,20 +38,18 @@
       this.el.object3D.getWorldPosition(this._a);
       t.object3D.getWorldPosition(this._b);
       const d = this._a.distanceTo(this._b);
-      const shouldShow = d <= this.data.distance;
 
-      this._targetOpacity = shouldShow ? 1.0 : 0.0;
+      const goingIn = d <= this.data.distance;
+      const step    = (delta / this.data.duration) * (goingIn ? 1 : -1);
+      const next    = THREE.MathUtils.clamp(this._opacity + step, 0, 1);
 
-      const speed = delta / this.data.duration;
-      if (this._opacity < this._targetOpacity) {
-        this._opacity = Math.min(this._opacity + speed, this._targetOpacity);
-      } else if (this._opacity > this._targetOpacity) {
-        this._opacity = Math.max(this._opacity - speed, this._targetOpacity);
+      if (next !== this._opacity) {
+        this._opacity = next;
+        this.applyOpacity(this._opacity);
       }
-      this.applyOpacity(this._opacity);
     },
     applyOpacity(value) {
-      // 1) Meshes (GLTF, geometries)
+      // Meshes (GLTF, geometrías)
       const mesh = this.el.getObject3D('mesh');
       if (mesh) {
         mesh.traverse(node => {
@@ -66,26 +58,27 @@
             mats.forEach(m => {
               m.transparent = true;
               m.opacity = value;
+              if (m.alphaTest) m.alphaTest = Math.min(m.alphaTest, 0.01);
             });
           }
         });
       }
-      // 2) Material component (primitives como <a-plane>)
+      // Material component (ej. <a-plane>)
       if (this.el.components.material) {
         this.el.setAttribute('material', 'transparent', true);
         this.el.setAttribute('material', 'opacity', value);
       }
-      // 3) Texto (componente text)
+      // Texto
       if (this.el.components.text) {
         const current = this.el.getAttribute('text') || {};
         this.el.setAttribute('text', Object.assign({}, current, { opacity: value }));
       }
-      // 4) Aplicar recursivamente a hijos
-      this.el.children.forEach(child => {
+      // Aplicar a hijos
+      Array.from(this.el.children).forEach(child => {
         if (child.components && (child.components.material || child.components.text)) {
           if (child.components.material) {
             child.setAttribute('material', 'transparent', true);
-            child.setAttribute('material', 'opacity', value * 0.4); // fondo semitransparente
+            child.setAttribute('material', 'opacity', value);
           }
           if (child.components.text) {
             const current = child.getAttribute('text') || {};
@@ -108,10 +101,6 @@
   });
   </script>
 </head>
-
-<!-- ********************************* -->
-<!--        Assets Enviro       -->        
-<!-- ********************************* -->
   
 <body>
   <a-scene
@@ -127,15 +116,15 @@
 
     <a-sound id="bg-sound" src="./assets/music.mp3" autoplay="false" loop="true" volume="0.4" position="0 1.6 0"></a-sound>
 
-    <!-- Modern light rig -->
+    <!-- Luces -->
     <a-entity light="type: ambient; intensity: 0.2"></a-entity>
     <a-entity light="type: hemisphere; intensity: 0.4; color: #ffffff; groundColor: #556677"></a-entity>
     <a-entity light="type: directional; intensity: 2.2" position="2 4 3"></a-entity>
 
-    <!-- Models -->
+    <!-- Modelos -->
     <a-entity gltf-model="#mdl-cristales" position="0 6 10" scale="1 1 1" animation-mixer></a-entity>
 
-    <!-- Planet: fades in/out -->
+    <!-- Planeta -->
     <a-entity id="planet"
               gltf-model="#planeta_museo_exterior"
               position="3 2 0"
@@ -145,34 +134,29 @@
               animation__float="property: position; dir: alternate; dur: 4000; easing: easeInOutSine; loop: true; to: 3 2.05 0">
     </a-entity>
 
-    <!-- Texto + fondo: fade in/out -->
-    <a-entity id="planet-text-group" position="4.5 1.6 0" rotation="0 -20 0"
-              show-on-near="target: #rig; distance: 4; duration: 1200">
-      
-      <!-- Fondo negro translúcido -->
-      <a-plane id="planet-text-bg"
-               width="3.6"
-               height="3.2"
-               color="#000000"
-               opacity="0.4"
-               material="transparent: true; opacity: 0.0">
-      </a-plane>
+<!-- Texto + fondo (grupo) -->
+<a-entity id="planet-text-group" position="4.5 1.6 0" rotation="0 -20 0"
+          show-on-near="target: #rig; distance: 4; duration: 1200">
+  
+  <!-- Fondo negro translúcido (más grande y menos opaco) -->
+  <a-plane id="planet-text-bg"
+           width="3.6"
+           height="3.2"
+           color="#000000"
+           opacity="0.4"
+           material="transparent: true; opacity: 0.4">
+  </a-plane>
 
-      <!-- Texto -->
-      <a-entity id="planet-text"
-                position="0 0 0.01"
-                text="value: Over three billion years ago, Earth was a very different place: young oceans, almost no oxygen, and layers of water where light filtered gently down. In that setting, life began to use sunlight in simple ways.\n\nAmong those early light-users were the purple bacteria. They carry out photosynthesis without releasing oxygen. Instead of splitting water, they use substances like hydrogen sulphide or organic compounds. That’s why they thrive where there is light but little oxygen—in microbial mats and stratified waters. They offer a glimpse of what photosynthesis may have looked like before the version that oxygenated the planet.\n\nMuch later came the cyanobacteria with the “modern” form of photosynthesis that does release oxygen, triggering the Great Oxidation around 2.4 billion years ago—a leap that changed the air and the oceans for good.; 
-                      align: left; wrapCount: 50; width: 3.5; color: #FFFFFF; opacity: 0">
-      </a-entity>
-    </a-entity>
+  <!-- Texto -->
+  <a-entity id="planet-text"
+            position="0 0 0.01"
+            text="value: ; align: left; wrapCount: 50; width: 3.5; color: #FFFFFF; opacity: 0">
+  </a-entity>
+</a-entity>
 
     <a-entity gltf-model="#mdl-techo_paredes_2" position="0 6 10" scale="1 1 1" animation-mixer></a-entity>
 
-  <!-- ********************************* -->
-  <!--        Interactividad       -->        
-  <!-- ********************************* -->
-    
-    <!-- Camera + controls -->
+    <!-- Cámara -->
     <a-entity id="rig" position="0 1.6 4" wasd-controls>
       <a-entity camera look-controls cursor="rayOrigin: mouse"></a-entity>
     </a-entity>
@@ -183,7 +167,7 @@
   <!-- ********************************* -->
   
   <script>
-  // Play background sound on first user interaction (autoplay policies)
+  // Música
   function playSound() {
     const sound = document.querySelector("#bg-sound");
     if (sound && sound.components && sound.components.sound) {
@@ -191,6 +175,19 @@
     }
   }
   document.addEventListener("click", playSound);
+
+  // Texto largo asignado vía JS
+  const txt = `Over three billion years ago, Earth was a very different place: young oceans, almost no oxygen, and layers of water where light filtered gently down. In that setting, life began to use sunlight in simple ways.
+
+Among those early light-users were the purple bacteria. They carry out photosynthesis without releasing oxygen. Instead of splitting water, they use substances like hydrogen sulphide or organic compounds. That’s why they thrive where there is light but little oxygen—in microbial mats and stratified waters. They offer a glimpse of what photosynthesis may have looked like before the version that oxygenated the planet.
+
+Much later came the cyanobacteria with the “modern” form of photosynthesis that does release oxygen, triggering the Great Oxidation around 2.4 billion years ago—a leap that changed the air and the oceans for good.`;
+
+  const textEl = document.querySelector('#planet-text');
+  if (textEl) {
+    const current = textEl.getAttribute('text') || {};
+    textEl.setAttribute('text', Object.assign({}, current, { value: txt }));
+  }
   </script>
 </body>
 </html>
