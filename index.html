@@ -26,11 +26,28 @@
       this._opacity = 0;
       this._a = new THREE.Vector3();
       this._b = new THREE.Vector3();
+
+      // WeakMap to remember each node/material's base opacity
+      this._base = new WeakMap();
+
       if (this.el.object3D) this.el.object3D.visible = true;
+
+      // Capture base opacities once so we can scale them
+      this.captureBaseOpacities(this.el);
+
+      // Start invisible
       this.applyOpacity(0);
-      this.el.addEventListener('model-loaded', () => this.applyOpacity(0));
-      this.el.addEventListener('object3dset',   () => this.applyOpacity(0));
+
+      this.el.addEventListener('model-loaded', () => {
+        this.captureBaseOpacities(this.el);
+        this.applyOpacity(0);
+      });
+      this.el.addEventListener('object3dset', () => {
+        this.captureBaseOpacities(this.el);
+        this.applyOpacity(0);
+      });
     },
+
     tick(time, delta) {
       const t = this.data.target;
       if (!t || !t.object3D) return;
@@ -48,55 +65,85 @@
         this.applyOpacity(this._opacity);
       }
     },
-    applyOpacity(value) {
-      // Meshes (GLTF, geometrías)
-      const mesh = this.el.getObject3D('mesh');
+
+    // ---------- Helpers ----------
+
+    // Record the "base" opacity of everything under el once
+    captureBaseOpacities(el) {
+      // For entity-level material component (e.g., <a-plane>)
+      if (el.components && el.components.material) {
+        const matAttr = el.getAttribute('material') || {};
+        const base = (typeof matAttr.opacity === 'number') ? matAttr.opacity : 1;
+        this._base.set(el, base);
+      }
+      // For entity-level text component
+      if (el.components && el.components.text) {
+        const txtAttr = el.getAttribute('text') || {};
+        const base = (typeof txtAttr.opacity === 'number') ? txtAttr.opacity : 1;
+        // Use a small holder object as the key to distinguish from material
+        const key = { type: 'text', el };
+        el.__textBaseKey = key;
+        this._base.set(key, base);
+      }
+      // For mesh materials (GLTF, geometry)
+      const mesh = el.getObject3D('mesh');
       if (mesh) {
         mesh.traverse(node => {
           if (node.isMesh && node.material) {
             const mats = Array.isArray(node.material) ? node.material : [node.material];
             mats.forEach(m => {
-              m.transparent = true;
-              m.opacity = value;
-              if (m.alphaTest) m.alphaTest = Math.min(m.alphaTest, 0.01);
+              if (!this._base.has(m)) this._base.set(m, (typeof m.opacity === 'number') ? m.opacity : 1);
             });
           }
         });
       }
-      // Material component (ej. <a-plane>)
-      if (this.el.components.material) {
-        this.el.setAttribute('material', 'transparent', true);
-        this.el.setAttribute('material', 'opacity', value);
-      }
-      // Texto
-      if (this.el.components.text) {
-        const current = this.el.getAttribute('text') || {};
-        this.el.setAttribute('text', Object.assign({}, current, { opacity: value }));
-      }
-      // Aplicar a hijos
-      Array.from(this.el.children).forEach(child => {
-        if (child.components && (child.components.material || child.components.text)) {
-          if (child.components.material) {
-            child.setAttribute('material', 'transparent', true);
-            child.setAttribute('material', 'opacity', value);
+      // Recurse into children
+      Array.from(el.children).forEach(child => this.captureBaseOpacities(child));
+    },
+
+    // Apply scaled opacity = baseOpacity * value to el and its children
+    applyOpacity(value) {
+      this.setOpacityForEl(this.el, value);
+      Array.from(this.el.children).forEach(child => this.setOpacityForEl(child, value));
+    },
+
+    setOpacityForEl(el, value) {
+      // Meshes
+      const mesh = el.getObject3D('mesh');
+      if (mesh) {
+        mesh.traverse(node => {
+          if (node.isMesh && node.material) {
+            const mats = Array.isArray(node.material) ? node.material : [node.material];
+            mats.forEach(m => {
+              const base = this._base.get(m) ?? 1;
+              const v = base * value;
+              m.transparent = v < 1 || base < 1;
+              m.opacity = v;
+              if (m.alphaTest) m.alphaTest = Math.min(m.alphaTest, 0.01);
+              m.needsUpdate = true;
+            });
           }
-          if (child.components.text) {
-            const current = child.getAttribute('text') || {};
-            child.setAttribute('text', Object.assign({}, current, { opacity: value }));
-          }
-        }
-        if (child.getObject3D('mesh')) {
-          child.getObject3D('mesh').traverse(node => {
-            if (node.isMesh && node.material) {
-              const mats = Array.isArray(node.material) ? node.material : [node.material];
-              mats.forEach(m => {
-                m.transparent = true;
-                m.opacity = value;
-              });
-            }
-          });
-        }
-      });
+        });
+      }
+
+      // Material component (e.g., <a-plane>)
+      if (el.components && el.components.material) {
+        const base = this._base.get(el) ?? 1;
+        const v = base * value;
+        el.setAttribute('material', 'transparent', v < 1 || base < 1);
+        el.setAttribute('material', 'opacity', v);
+      }
+
+      // Text component
+      if (el.components && el.components.text && el.__textBaseKey) {
+        const base = this._base.get(el.__textBaseKey) ?? 1;
+        const v = base * value;
+        const current = el.getAttribute('text') || {};
+        el.setAttribute('text', Object.assign({}, current, { opacity: v }));
+      }
+
+      // Recurse into children
+      Array.from(el.children).forEach(child => this.setOpacityForEl(child, value));
     }
   });
   </script>
@@ -134,17 +181,21 @@
               animation__float="property: position; dir: alternate; dur: 4000; easing: easeInOutSine; loop: true; to: 3 2.05 0">
     </a-entity>
 
-<!-- Texto + fondo (grupo) -->
-<a-entity id="planet-text-group" position="5 1.6 -0.2" rotation="0 -25 0" show-on-near="target: #rig; distance: 4; duration: 1200">
-  
-  <!-- Fondo negro translúcido -->
-  <a-plane id="planet-text-bg" width="3.6" height="3.1" color="#000000" opacity="0.4" material="transparent: true; opacity: 0.4" geometry="">
-  </a-plane>
+    <!-- Texto + fondo (grupo) -->
+    <a-entity id="planet-text-group" position="5 1.6 -0.2" rotation="0 -25 0" show-on-near="target: #rig; distance: 4; duration: 1200">
+      <!-- Fondo negro translúcido (base opacity = 0.4) -->
+      <a-plane id="planet-text-bg"
+               width="3.6" height="3.1"
+               color="#000000"
+               material="transparent: true; opacity: 0.4">
+      </a-plane>
 
-  <!-- Texto -->
-  <a-entity id="planet-text" position="0 0.2 0.01" text="value: ; align: left; wrapCount: 50; width: 3.5; color: #FFFFFF; opacity: 0">
-  </a-entity>
-</a-entity>
+      <!-- Texto -->
+      <a-entity id="planet-text"
+                position="0 0.2 0.01"
+                text="value: ; align: left; wrapCount: 50; width: 3.5; color: #FFFFFF; opacity: 1">
+      </a-entity>
+    </a-entity>
 
     <a-entity gltf-model="#mdl-techo_paredes_2" position="0 6 10" scale="1 1 1" animation-mixer></a-entity>
 
@@ -183,5 +234,3 @@ Much later came the cyanobacteria with the “modern” form of photosynthesis t
   </script>
 </body>
 </html>
-
-
