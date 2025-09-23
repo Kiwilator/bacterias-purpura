@@ -162,22 +162,32 @@
     },
     onClick() {
       const t = this.data.target;
-      const s = this.data.sound && this.data.sound.components ? this.data.sound.components.sound : null;
+      const soundCmp = this.data.sound && this.data.sound.components ? this.data.sound.components.sound : null;
       if (!t) return;
+
+      // ✅ Make sure the AudioContext is unlocked BEFORE playing the first time
+      try {
+        const ctx = this.el.sceneEl.audioListener && this.el.sceneEl.audioListener.context;
+        if (ctx && ctx.state !== 'running') ctx.resume();
+      } catch (e) {}
 
       const visibleNow = !!t.getAttribute('visible');
 
       if (visibleNow) {
-        // Hide and pause
+        // Hide + pause
         t.setAttribute('visible', false);
-        if (s) { try { s.pauseSound(); } catch(e) {} }
+        if (soundCmp) { try { soundCmp.pauseSound(); } catch(e) {} }
       } else {
-        // Show and play/resume (no loop)
+        // Show + play/resume (non-looping)
         t.setAttribute('visible', true);
-        if (s) {
+        if (soundCmp) {
           try {
-            // If not currently playing, play (resumes if previously paused)
-            if (!s.isPlaying) s.playSound();
+            // If the sound finished previously, ensure it (re)starts from the beginning
+            if (!soundCmp.isPlaying) {
+              // Stop resets the offset on some platforms; then play
+              soundCmp.stopSound();
+              soundCmp.playSound();
+            }
           } catch(e) {}
         }
       }
@@ -188,7 +198,6 @@
       const t = this.data.target;
       const s = this.data.sound && this.data.sound.components ? this.data.sound.components.sound : null;
       if (!label) return;
-      // If panel is visible AND (sound exists and isPlaying), show "Pause", else "Play"
       const panelVisible = t ? !!t.getAttribute('visible') : false;
       const playing = s ? !!s.isPlaying : false;
       const nextText = (panelVisible && playing) ? this.data.pauseText : this.data.playText;
@@ -206,9 +215,9 @@
   
 <body>
   <a-scene
-    renderer="colorManagement: true; physicallyCorrectLights: true; toneMapping: ACESFilmic; exposure: 1.2"
-    background="color: #c6ddf1"
-    fog="type: exponential; color: #d9d9d9; density: 0.1"
+    renderer="colorManagement: true; physicallyCorrectLights: true; toneMapping: ACESFilmic; exposure: 1.0"
+    background="color: #a5b7c6"
+    fog="type: exponential; color: #8fa0ae; density: 0.12"
   >
     <a-assets timeout="15000">
       <a-asset-item id="mdl-cristales" src="./assets/cristales_bacterias_2.glb"></a-asset-item>
@@ -229,12 +238,23 @@
       <audio id="planet-voiceover" src="./assets/planet_voiceover_01.mp3" preload="auto"></audio>
     </a-assets>
 
-    <a-sound id="bg-sound" src="./assets/music.mp3" autoplay="false" loop="true" volume="0.4" position="0 1.6 0"></a-sound>
+    <!-- Global lights — dimmer overall for mood -->
+    <a-entity light="type: ambient; intensity: 0.05; color: #ffffff"></a-entity>
+    <a-entity light="type: hemisphere; intensity: 0.15; color: #dfe7ef; groundColor: #44505a"></a-entity>
+    <a-entity light="type: directional; intensity: 0.6; color: #ffffff" position="2 4 3"></a-entity>
 
-    <!-- Luces -->
-    <a-entity light="type: ambient; intensity: 0.2"></a-entity>
-    <a-entity light="type: hemisphere; intensity: 0.4; color: #ffffff; groundColor: #556677"></a-entity>
-    <a-entity light="type: directional; intensity: 2.2" position="2 4 3"></a-entity>
+    <!-- Accent spotlight over the big screen -->
+    <a-entity position="2.8 5 3.2"
+              light="type: spot; intensity: 2.2; angle: 35; penumbra: 0.7; distance: 15; decay: 1; color: #ffffff">
+    </a-entity>
+
+    <!-- Accent spotlight over the planet -->
+    <a-entity position="3 4 0.2"
+              light="type: spot; intensity: 2.0; angle: 40; penumbra: 0.6; distance: 12; decay: 1; color: #fff3e6">
+    </a-entity>
+
+    <!-- Background music -->
+    <a-sound id="bg-sound" src="./assets/music.mp3" autoplay="false" loop="true" volume="0.25" position="0 1.6 0"></a-sound>
 
     <!-- Modelos -->
     <a-entity gltf-model="#mdl-cristales" position="0 6 10" scale="1 1 1" animation-mixer></a-entity>
@@ -283,7 +303,7 @@
               position="5 1.6 -0.2"
               rotation="0 -25 0"
               visible="false">
-      <a-plane id="planet-text-bg" width="3.6" height="3.1" color="#000000" material="transparent: true; opacity: 0.4"></a-plane>
+      <a-plane id="planet-text-bg" width="3.6" height="3.1" color="#000000" material="transparent: true; opacity: 0.45"></a-plane>
       <a-entity id="planet-text" position="0 0.2 0.01"
                 text="value: ; align: left; wrapCount: 50; width: 3.5; color: #FFFFFF; opacity: 1"></a-entity>
     </a-entity>
