@@ -11,27 +11,6 @@
   <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.0/dist/aframe-extras.min.js"></script>
   <link rel="stylesheet" href="./style.css">
 
-  <style>
-    /* Small overlay button for mute/unmute */
-    .ui {
-      position: fixed;
-      inset: 16px 16px auto auto;
-      z-index: 9999;
-      display: flex;
-      gap: 8px;
-    }
-    .ui button {
-      font: 600 14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
-      padding: 10px 14px;
-      border-radius: 10px;
-      border: 0;
-      box-shadow: 0 4px 12px rgba(0,0,0,.15);
-      background: white;
-      cursor: pointer;
-    }
-    .ui button:active { transform: translateY(1px); }
-  </style>
-
   <!-- ********************************* -->
   <!--        Scripts Head      -->        
   <!-- ********************************* -->
@@ -164,15 +143,53 @@
       Array.from(el.children).forEach(child => this.setOpacityForEl(child, value));
     }
   });
+
+  // In-world video audio toggle component
+  AFRAME.registerComponent('video-audio-toggle', {
+    schema: {
+      video: { type: 'selector' },     // <video> asset element
+      label: { type: 'selector' }      // text entity to update
+    },
+    init() {
+      this._onClick = this.onClick.bind(this);
+      this._onEnter = () => this.el.setAttribute('material', 'opacity', 0.9);
+      this._onLeave = () => this.el.setAttribute('material', 'opacity', 0.7);
+      this.el.addEventListener('click', this._onClick);
+      this.el.addEventListener('mouseenter', this._onEnter);
+      this.el.addEventListener('mouseleave', this._onLeave);
+      this.updateLabel();
+    },
+    playVideo() {
+      const v = this.data.video;
+      if (!v) return;
+      const p = v.play();
+      if (p && typeof p.then === 'function') p.catch(()=>{ /* ignore */ });
+    },
+    onClick() {
+      const v = this.data.video;
+      if (!v) return;
+      this.playVideo();        // ensure playing after a user gesture
+      v.muted = !v.muted;      // toggle
+      if (!v.muted && v.volume === 0) v.volume = 0.8;
+      this.updateLabel();
+    },
+    updateLabel() {
+      const v = this.data.video, label = this.data.label;
+      if (!v || !label) return;
+      const isMuted = v.muted || v.volume === 0;
+      const current = label.getAttribute('text') || {};
+      label.setAttribute('text', Object.assign({}, current, { value: isMuted ? 'Unmute' : 'Mute' }));
+    },
+    remove() {
+      this.el.removeEventListener('click', this._onClick);
+      this.el.removeEventListener('mouseenter', this._onEnter);
+      this.el.removeEventListener('mouseleave', this._onLeave);
+    }
+  });
   </script>
 </head>
   
 <body>
-  <!-- Simple UI button -->
-  <div class="ui">
-    <button id="toggle-video-audio" type="button" aria-pressed="true" aria-label="Unmute video">Unmute video</button>
-  </div>
-
   <a-scene
     renderer="colorManagement: true; physicallyCorrectLights: true; toneMapping: ACESFilmic; exposure: 1.2"
     background="color: #c6ddf1"
@@ -230,11 +247,11 @@
       </a-entity>
     </a-entity>
 
-    <!-- BIG SCREEN with the video -->
-    <!-- Positioned in front of the default forward (-Z) view; tweak as you like -->
+    <!-- BIG SCREEN with the video + in-world button -->
     <a-entity position="2.8 0 5" rotation="0 180 0">
-      <!-- Optional simple frame behind the video -->
-      <a-plane position="0 2 -2.02" width="8.6" height="8.1" color="#111" material="opacity: 0.6; transparent: true"></a-plane>
+      <!-- Background frame behind the video -->
+      <a-plane position="0 3 -2.02" width="8.6" height="4.6" color="#111" material="opacity: 0.6; transparent: true"></a-plane>
+
       <!-- The actual video surface -->
       <a-video id="video-screen"
                src="#museum-video"
@@ -244,12 +261,26 @@
                rotation="0 0 0"
                material="shader: flat">
       </a-video>
+
+      <!-- In-world mute/unmute button, placed to the lower-right of the screen -->
+      <a-entity id="video-audio-button" position="3.9 0.8 -1.95" rotation="0 0 0">
+        <!-- Button body -->
+        <a-plane width="1.2" height="0.45" color="#ffffff" material="transparent: true; opacity: 0.7" 
+                 class="clickable"
+                 video-audio-toggle="video: #museum-video; label: #video-audio-label"></a-plane>
+        <!-- Button label -->
+        <a-entity id="video-audio-label"
+                  position="0 0 0.01"
+                  text="value: Unmute; align: center; width: 2.2; color: #111; wrapCount: 20">
+        </a-entity>
+      </a-entity>
     </a-entity>
 
     <a-entity gltf-model="#mdl-techo_paredes_2" position="0 6 10" scale="1 1 1" animation-mixer></a-entity>
 
     <!-- Cámara -->
     <a-entity id="rig" position="0 1.6 4" wasd-controls>
+      <!-- Mouse ray cursor works for desktop; in VR, default controller lasers will click too -->
       <a-entity camera look-controls cursor="rayOrigin: mouse"></a-entity>
     </a-entity>
   </a-scene>
@@ -259,7 +290,7 @@
   <!-- ********************************* -->
   
   <script>
-  // Música
+  // Background music (start on first user interaction once)
   function playSound() {
     const sound = document.querySelector("#bg-sound");
     if (sound && sound.components && sound.components.sound) {
@@ -268,54 +299,26 @@
   }
   document.addEventListener("click", playSound, { once: true });
 
-  // Ensure the video starts (muted autoplay should work; we also fall back to a user-gesture play)
+  // Ensure the video starts (muted autoplay should work; also retry on user gesture)
   const vid = document.getElementById('museum-video');
   function tryPlayVideo() {
     if (!vid) return;
-    const playPromise = vid.play();
-    if (playPromise && typeof playPromise.then === 'function') {
-      playPromise.catch(() => {/* ignore — will try again on user interaction */});
-    }
+    const p = vid.play();
+    if (p && typeof p.then === 'function') p.catch(()=>{ /* ignore */ });
   }
-  // Try on load…
   if (vid) {
-    // iOS needs a touch/click sometimes; still attempt autoplay
     tryPlayVideo();
-    // Also ensure it's playing after the first user interaction
     const resume = () => { tryPlayVideo(); document.removeEventListener('click', resume); document.removeEventListener('touchend', resume); };
     document.addEventListener('click', resume, { passive: true });
     document.addEventListener('touchend', resume, { passive: true });
   }
 
-  // Mute / Unmute toggle button
-  const btn = document.getElementById('toggle-video-audio');
-  function updateBtnLabel() {
-    if (!btn || !vid) return;
-    const isMuted = vid.muted || vid.volume === 0;
-    btn.textContent = isMuted ? 'Unmute video' : 'Mute video';
-    btn.setAttribute('aria-pressed', String(!isMuted));
-    btn.setAttribute('aria-label', isMuted ? 'Unmute video' : 'Mute video');
-  }
-  if (btn && vid) {
-    updateBtnLabel();
-    btn.addEventListener('click', () => {
-      // Make sure the video is playing (gesture guarantees audio unlock)
-      tryPlayVideo();
-      // Toggle mute
-      vid.muted = !vid.muted;
-      // If unmuting and volume is 0, set a sensible level
-      if (!vid.muted && vid.volume === 0) vid.volume = 0.8;
-      updateBtnLabel();
-    });
-  }
-
-  // Texto largo asignado vía JS
+  // Text content
   const txt = `Over three billion years ago, Earth was a very different place: young oceans, almost no oxygen, and layers of water where light filtered gently down. In that setting, life began to use sunlight in simple ways.
 
 Among those early light-users were the purple bacteria. They carry out photosynthesis without releasing oxygen. Instead of splitting water, they use substances like hydrogen sulphide or organic compounds. That’s why they thrive where there is light but little oxygen—in microbial mats and stratified waters. They offer a glimpse of what photosynthesis may have looked like before the version that oxygenated the planet.
 
 Much later came the cyanobacteria with the “modern” form of photosynthesis that does release oxygen, triggering the Great Oxidation around 2.4 billion years ago—a leap that changed the air and the oceans for good.`;
-
   const textEl = document.querySelector('#planet-text');
   if (textEl) {
     const current = textEl.getAttribute('text') || {};
@@ -324,4 +327,3 @@ Much later came the cyanobacteria with the “modern” form of photosynthesis t
   </script>
 </body>
 </html>
-
