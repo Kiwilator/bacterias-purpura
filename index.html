@@ -232,15 +232,15 @@
 
     <!-- BIG SCREEN with the video -->
     <!-- Positioned in front of the default forward (-Z) view; tweak as you like -->
-    <a-entity position="0 0 0">
+    <a-entity position="2.8 0 5" rotation="0 180 0">
       <!-- Optional simple frame behind the video -->
-      <a-plane position="0 2 -2.02" width="3.6" height="2.1" color="#111" material="opacity: 0.6; transparent: true"></a-plane>
+      <a-plane position="0 2 -2.02" width="8.6" height="8.1" color="#111" material="opacity: 0.6; transparent: true"></a-plane>
       <!-- The actual video surface -->
       <a-video id="video-screen"
                src="#museum-video"
-               position="0 2 -2"
-               width="3.2"
-               height="1.8"
+               position="0 3 -2"
+               width="8"
+               height="4.2"
                rotation="0 0 0"
                material="shader: flat">
       </a-video>
@@ -324,3 +324,4 @@ Much later came the cyanobacteria with the “modern” form of photosynthesis t
   </script>
 </body>
 </html>
+
