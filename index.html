@@ -144,7 +144,7 @@
     }
   });
 
-  // In-world video audio toggle component
+  // In-world video audio toggle component (kept as-is)
   AFRAME.registerComponent('video-audio-toggle', {
     schema: {
       video: { type: 'selector' },     // <video> asset element
@@ -179,6 +179,46 @@
       const isMuted = v.muted || v.volume === 0;
       const current = label.getAttribute('text') || {};
       label.setAttribute('text', Object.assign({}, current, { value: isMuted ? 'Unmute' : 'Mute' }));
+    },
+    remove() {
+      this.el.removeEventListener('click', this._onClick);
+      this.el.removeEventListener('mouseenter', this._onEnter);
+      this.el.removeEventListener('mouseleave', this._onLeave);
+    }
+  });
+
+  // NEW: In-world button to toggle visibility of an entity (for the info text panel)
+  AFRAME.registerComponent('toggle-entity-visibility', {
+    schema: {
+      target: { type: 'selector' },  // entity to show/hide
+      label:  { type: 'selector' },  // label entity to update
+      showText: { default: 'Play' },
+      hideText: { default: 'Hide' }
+    },
+    init() {
+      this._onClick = this.onClick.bind(this);
+      this._onEnter = () => this.el.setAttribute('material', 'opacity', 0.9);
+      this._onLeave = () => this.el.setAttribute('material', 'opacity', 0.7);
+      this.el.addEventListener('click', this._onClick);
+      this.el.addEventListener('mouseenter', this._onEnter);
+      this.el.addEventListener('mouseleave', this._onLeave);
+      // Ensure starts hidden label says "Play"
+      this.updateLabel();
+    },
+    onClick() {
+      const t = this.data.target;
+      if (!t) return;
+      const next = !(t.getAttribute('visible'));
+      t.setAttribute('visible', next);
+      this.updateLabel();
+    },
+    updateLabel() {
+      const t = this.data.target, label = this.data.label;
+      if (!label || !t) return;
+      const isVisible = !!t.getAttribute('visible');
+      const txt = isVisible ? this.data.hideText : this.data.showText;
+      const current = label.getAttribute('text') || {};
+      label.setAttribute('text', Object.assign({}, current, { value: txt }));
     },
     remove() {
       this.el.removeEventListener('click', this._onClick);
@@ -231,10 +271,8 @@
               animation__float="property: position; dir: alternate; dur: 4000; easing: easeInOutSine; loop: true; to: 3 2.05 0">
     </a-entity>
 
-    <!-- Pedestal bajo el planeta -->
-    <a-entity id="planet-pedestal"
-              position="3 0 0"
-              show-on-near="target: #camera; distance: 4; duration: 1200">
+    <!-- Pedestal bajo el planeta (SIEMPRE visible) -->
+    <a-entity id="planet-pedestal" position="3 0 0">
       <!-- Base baja ancha -->
       <a-cylinder position="0 0.05 0"
                   radius="1.05"
@@ -256,14 +294,27 @@
                   color="#cfd5db"
                   material="metalness: 0.15; roughness: 0.4">
       </a-cylinder>
+
+      <!-- In-world PLAY button next to pedestal -->
+      <a-entity id="info-play-button" position="1.1 0.8 0" rotation="0 -90 0">
+        <a-plane width="1.2" height="0.45" color="#ffffff"
+                 material="transparent: true; opacity: 0.7"
+                 class="clickable"
+                 toggle-entity-visibility="target: #planet-text-group; label: #info-play-label; showText: Play; hideText: Hide">
+        </a-plane>
+        <a-entity id="info-play-label"
+                  position="0 0 0.01"
+                  text="value: Play; align: center; width: 2.2; color: #111; wrapCount: 20">
+        </a-entity>
+      </a-entity>
     </a-entity>
 
-    <!-- Texto + fondo (grupo) -->
+    <!-- Texto + fondo (grupo) — ahora controlado por el PLAY (empieza oculto) -->
     <a-entity id="planet-text-group"
               position="5 1.6 -0.2"
               rotation="0 -25 0"
-              show-on-near="target: #camera; distance: 4; duration: 1200">
-      <!-- Fondo negro translúcido (base opacity = 0.4) -->
+              visible="false">
+      <!-- Fondo negro translúcido -->
       <a-plane id="planet-text-bg"
                width="3.6" height="3.1"
                color="#000000"
@@ -277,7 +328,7 @@
       </a-entity>
     </a-entity>
 
-    <!-- BIG SCREEN with the video + in-world button -->
+    <!-- BIG SCREEN with the video + in-world mute/unmute button -->
     <a-entity position="2.8 0 5" rotation="0 180 0">
       <!-- Background frame behind the video -->
       <a-plane position="0 3 -2.02" width="8.6" height="4.6" color="#111" material="opacity: 0.6; transparent: true"></a-plane>
