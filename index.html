@@ -142,7 +142,7 @@
     }
   });
 
-  // Toggle text visibility AND play/pause the pedestal voiceover with label update
+  // Toggle panel + play/pause voiceover; with ironclad first-click unlock
   AFRAME.registerComponent('toggle-entity-visibility', {
     schema: {
       target:   { type: 'selector' },          // entity to show/hide
@@ -160,16 +160,20 @@
       this.el.addEventListener('mouseleave', this._onLeave);
       this.updateLabel(); // start as "Play"
     },
+    unlockAudioIfNeeded() {
+      try {
+        const scene = this.el.sceneEl;
+        const ctx = scene && scene.audioListener && scene.audioListener.context;
+        if (ctx && ctx.state !== 'running') ctx.resume();
+      } catch (e) {}
+    },
     onClick() {
       const t = this.data.target;
       const soundCmp = this.data.sound && this.data.sound.components ? this.data.sound.components.sound : null;
       if (!t) return;
 
-      // ✅ Make sure the AudioContext is unlocked BEFORE playing the first time
-      try {
-        const ctx = this.el.sceneEl.audioListener && this.el.sceneEl.audioListener.context;
-        if (ctx && ctx.state !== 'running') ctx.resume();
-      } catch (e) {}
+      // Ensure audio context is running (first click on iOS/Chrome)
+      this.unlockAudioIfNeeded();
 
       const visibleNow = !!t.getAttribute('visible');
 
@@ -182,11 +186,10 @@
         t.setAttribute('visible', true);
         if (soundCmp) {
           try {
-            // If the sound finished previously, ensure it (re)starts from the beginning
+            // If ended or not playing yet, restart clean; else resume
             if (!soundCmp.isPlaying) {
-              // Stop resets the offset on some platforms; then play
-              soundCmp.stopSound();
-              soundCmp.playSound();
+              soundCmp.stopSound();   // resets offset on all platforms
+              soundCmp.playSound();   // play from start
             }
           } catch(e) {}
         }
@@ -215,9 +218,9 @@
   
 <body>
   <a-scene
-    renderer="colorManagement: true; physicallyCorrectLights: true; toneMapping: ACESFilmic; exposure: 1.0"
-    background="color: #a5b7c6"
-    fog="type: exponential; color: #8fa0ae; density: 0.12"
+    renderer="colorManagement: true; physicallyCorrectLights: true; toneMapping: ACESFilmic; exposure: 0.85; shadowMap: true"
+    background="color: #9aa7b3"
+    fog="type: exponential; color: #7a8793; density: 0.14"
   >
     <a-assets timeout="15000">
       <a-asset-item id="mdl-cristales" src="./assets/cristales_bacterias_2.glb"></a-asset-item>
@@ -238,42 +241,45 @@
       <audio id="planet-voiceover" src="./assets/planet_voiceover_01.mp3" preload="auto"></audio>
     </a-assets>
 
-    <!-- Global lights — dimmer overall for mood -->
-    <a-entity light="type: ambient; intensity: 0.05; color: #ffffff"></a-entity>
-    <a-entity light="type: hemisphere; intensity: 0.15; color: #dfe7ef; groundColor: #44505a"></a-entity>
-    <a-entity light="type: directional; intensity: 0.6; color: #ffffff" position="2 4 3"></a-entity>
+    <!-- Global lights — darker mood -->
+    <a-entity light="type: ambient; intensity: 0.04; color: #ffffff"></a-entity>
+    <a-entity light="type: hemisphere; intensity: 0.12; color: #dfe7ef; groundColor: #39454f"></a-entity>
+    <a-entity light="type: directional; intensity: 0.45; color: #ffffff; castShadow: true" position="2 4 3"></a-entity>
 
-    <!-- Accent spotlight over the big screen -->
-    <a-entity position="2.8 5 3.2"
-              light="type: spot; intensity: 2.2; angle: 35; penumbra: 0.7; distance: 15; decay: 1; color: #ffffff">
+    <!-- BIG SCREEN spotlight (aimed at the screen) -->
+    <a-entity id="screen-spot"
+              position="2.8 5 3.2"
+              light="type: spot; intensity: 3; angle: 30; penumbra: 0.6; distance: 24; decay: 1; color: #ffffff; castShadow: true; target: #video-screen">
     </a-entity>
 
-    <!-- Accent spotlight over the planet -->
-    <a-entity position="3 4 0.2"
-              light="type: spot; intensity: 2.0; angle: 40; penumbra: 0.6; distance: 12; decay: 1; color: #fff3e6">
+    <!-- PLANET spotlight (aimed at the planet) -->
+    <a-entity id="planet-spot"
+              position="3 4 0.8"
+              light="type: spot; intensity: 2.8; angle: 35; penumbra: 0.6; distance: 18; decay: 1; color: #fff3e6; castShadow: true; target: #planet">
     </a-entity>
 
     <!-- Background music -->
-    <a-sound id="bg-sound" src="./assets/music.mp3" autoplay="false" loop="true" volume="0.25" position="0 1.6 0"></a-sound>
+    <a-sound id="bg-sound" src="./assets/music.mp3" autoplay="false" loop="true" volume="0.22" position="0 1.6 0"></a-sound>
 
     <!-- Modelos -->
-    <a-entity gltf-model="#mdl-cristales" position="0 6 10" scale="1 1 1" animation-mixer></a-entity>
+    <a-entity gltf-model="#mdl-cristales" position="0 6 10" scale="1 1 1" animation-mixer shadow="cast: true; receive: true"></a-entity>
 
     <!-- Planeta -->
     <a-entity id="planet"
               gltf-model="#planeta_museo_exterior"
               position="3 2 0"
               scale="1 1 1"
+              shadow="cast: true; receive: true"
               show-on-near="target: #camera; distance: 4; duration: 1200"
               animation__rotation="property: rotation; to: 5 5 600; loop: true; dur: 20000; easing: linear"
               animation__float="property: position; dir: alternate; dur: 4000; easing: easeInOutSine; loop: true; to: 3 2.05 0">
     </a-entity>
 
     <!-- Pedestal bajo el planeta (SIEMPRE visible) -->
-    <a-entity id="planet-pedestal" position="3 0 -2">
-      <a-cylinder position="0 0.05 0" radius="1.05" height="0.1" color="#7f8994" material="metalness: 0.2; roughness: 0.85"></a-cylinder>
-      <a-cylinder position="0 0.3 0"  radius="0.9"  height="0.5" color="#9aa3ad" material="metalness: 0.2; roughness: 0.6"></a-cylinder>
-      <a-cylinder position="0 0.58 0" radius="0.7"  height="0.06" color="#cfd5db" material="metalness: 0.15; roughness: 0.4"></a-cylinder>
+    <a-entity id="planet-pedestal" position="3 0 -2" shadow="cast: true; receive: true">
+      <a-cylinder position="0 0.05 0" radius="1.05" height="0.1" color="#7f8994" material="metalness: 0.2; roughness: 0.85" shadow="receive: true"></a-cylinder>
+      <a-cylinder position="0 0.3 0"  radius="0.9"  height="0.5" color="#9aa3ad" material="metalness: 0.2; roughness: 0.6"  shadow="cast: true; receive: true"></a-cylinder>
+      <a-cylinder position="0 0.58 0" radius="0.7"  height="0.06" color="#cfd5db" material="metalness: 0.15; roughness: 0.4" shadow="cast: true; receive: true"></a-cylinder>
 
       <!-- Voiceover sound (positional). Louder and non-looping -->
       <a-sound id="planet-voice"
@@ -289,7 +295,7 @@
         <a-plane width="1.2" height="0.45" color="#ffffff"
                  material="transparent: true; opacity: 0.7"
                  class="clickable"
-                 toggle-entity-visibility="target: #planet-text-group; label: #info-play-label; sound: #planet-voice; playText: Play; pauseText: Pause">
+                 toggle-entity-visibility="target: #planet-text-group; label: #info-play-label; sound: #planet-voice; playText: Play; pauseText: Pause" shadow="receive: true">
         </a-plane>
         <a-entity id="info-play-label"
                   position="0 0 0.01"
@@ -302,16 +308,30 @@
     <a-entity id="planet-text-group"
               position="5 1.6 -0.2"
               rotation="0 -25 0"
-              visible="false">
+              visible="false" shadow="receive: true">
       <a-plane id="planet-text-bg" width="3.6" height="3.1" color="#000000" material="transparent: true; opacity: 0.45"></a-plane>
       <a-entity id="planet-text" position="0 0.2 0.01"
                 text="value: ; align: left; wrapCount: 50; width: 3.5; color: #FFFFFF; opacity: 1"></a-entity>
     </a-entity>
 
     <!-- BIG SCREEN with the video + in-world mute/unmute button -->
-    <a-entity position="2.8 0 5" rotation="0 180 0">
-      <a-plane position="0 3 -2.02" width="8.6" height="4.6" color="#111" material="opacity: 0.6; transparent: true"></a-plane>
-      <a-video id="video-screen" src="#museum-video" position="0 3 -2" width="8" height="4.2" rotation="0 0 0" material="shader: flat"></a-video>
+    <a-entity position="2.8 0 5" rotation="0 180 0" shadow="cast: false; receive: true">
+      <!-- Background frame behind the video (receives light/shadows) -->
+      <a-plane id="screen-frame" position="0 3 -2.02" width="8.6" height="4.6" color="#111"
+               material="metalness: 0.1; roughness: 0.9" shadow="receive: true"></a-plane>
+
+      <!-- The actual video surface (lit so the spotlight affects it) -->
+      <a-video id="video-screen"
+               src="#museum-video"
+               position="0 3 -2"
+               width="8"
+               height="4.2"
+               rotation="0 0 0"
+               material="metalness: 0; roughness: 1"
+               shadow="receive: true">
+      </a-video>
+
+      <!-- In-world mute/unmute button, placed to the lower-right of the screen -->
       <a-entity id="video-audio-button" position="3.9 0.8 -1.95" rotation="0 0 0">
         <a-plane width="1.2" height="0.45" color="#ffffff" material="transparent: true; opacity: 0.7"
                  class="clickable"
@@ -321,7 +341,8 @@
       </a-entity>
     </a-entity>
 
-    <a-entity gltf-model="#mdl-techo_paredes_2" position="0 6 10" scale="1 1 1" animation-mixer></a-entity>
+    <!-- Museum shell receives shadows -->
+    <a-entity gltf-model="#mdl-techo_paredes_2" position="0 6 10" scale="1 1 1" animation-mixer shadow="receive: true"></a-entity>
 
     <!-- Cámara (WASD + look on the SAME entity) -->
     <a-entity id="rig" position="0 1.6 4">
@@ -342,6 +363,26 @@
     }
   }
   document.addEventListener("click", playSound, { once: true });
+
+  // One-time audio unlock + voiceover prime (so first click on Play works)
+  function unlockAndPrimeVoice() {
+    const scene = document.querySelector('a-scene');
+    try {
+      const ctx = scene && scene.audioListener && scene.audioListener.context;
+      if (ctx && ctx.state !== 'running') ctx.resume();
+    } catch(e) {}
+    const voice = document.querySelector('#planet-voice');
+    if (voice && voice.components && voice.components.sound) {
+      try {
+        // Start & immediately pause to prime buffer and unlock audio
+        voice.components.sound.stopSound();
+        voice.components.sound.playSound();
+        voice.components.sound.pauseSound();
+      } catch(e) {}
+    }
+  }
+  document.addEventListener('click', unlockAndPrimeVoice, { once: true, passive: true });
+  document.addEventListener('touchend', unlockAndPrimeVoice, { once: true, passive: true });
 
   // Ensure the video starts (muted autoplay should work; also retry on user gesture)
   const vid = document.getElementById('museum-video');
