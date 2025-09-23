@@ -11,6 +11,27 @@
   <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.0/dist/aframe-extras.min.js"></script>
   <link rel="stylesheet" href="./style.css">
 
+  <style>
+    /* Small overlay button for mute/unmute */
+    .ui {
+      position: fixed;
+      inset: 16px 16px auto auto;
+      z-index: 9999;
+      display: flex;
+      gap: 8px;
+    }
+    .ui button {
+      font: 600 14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 0;
+      box-shadow: 0 4px 12px rgba(0,0,0,.15);
+      background: white;
+      cursor: pointer;
+    }
+    .ui button:active { transform: translateY(1px); }
+  </style>
+
   <!-- ********************************* -->
   <!--        Scripts Head      -->        
   <!-- ********************************* -->
@@ -80,7 +101,6 @@
       if (el.components && el.components.text) {
         const txtAttr = el.getAttribute('text') || {};
         const base = (typeof txtAttr.opacity === 'number') ? txtAttr.opacity : 1;
-        // Use a small holder object as the key to distinguish from material
         const key = { type: 'text', el };
         el.__textBaseKey = key;
         this._base.set(key, base);
@@ -107,47 +127,52 @@
       Array.from(this.el.children).forEach(child => this.setOpacityForEl(child, value));
     },
 
-setOpacityForEl(el, value) {
-  // Meshes
-  const mesh = el.getObject3D('mesh');
-  if (mesh) {
-    mesh.traverse(node => {
-      if (node.isMesh && node.material) {
-        const mats = Array.isArray(node.material) ? node.material : [node.material];
-        mats.forEach(m => {
-          const base = this._base.get(m) ?? 1;
-          const v = base * value;
-          m.transparent = v < 1 || base < 1;
-          m.opacity = v;
-          if (m.alphaTest) m.alphaTest = Math.min(m.alphaTest, 0.01);
-          m.needsUpdate = true;
+    setOpacityForEl(el, value) {
+      // Meshes
+      const mesh = el.getObject3D('mesh');
+      if (mesh) {
+        mesh.traverse(node => {
+          if (node.isMesh && node.material) {
+            const mats = Array.isArray(node.material) ? node.material : [node.material];
+            mats.forEach(m => {
+              const base = this._base.get(m) ?? 1;
+              const v = base * value;
+              m.transparent = v < 1 || base < 1;
+              m.opacity = v;
+              if (m.alphaTest) m.alphaTest = Math.min(m.alphaTest, 0.01);
+              m.needsUpdate = true;
+            });
+          }
         });
       }
-    });
-  }
 
-  // Material component (e.g., <a-plane>)
-  if (el.components && el.components.material) {
-    const base = this._base.get(el) ?? 1;
-    const v = base * value;
-    el.setAttribute('material', 'transparent', v < 1 || base < 1);
-    el.setAttribute('material', 'opacity', v);
-  }
+      // Material component (e.g., <a-plane>)
+      if (el.components && el.components.material) {
+        const base = this._base.get(el) ?? 1;
+        const v = base * value;
+        el.setAttribute('material', 'transparent', v < 1 || base < 1);
+        el.setAttribute('material', 'opacity', v);
+      }
 
-  // Text component (fade always 0 → 1)
-  if (el.components && el.components.text) {
-    const current = el.getAttribute('text') || {};
-    el.setAttribute('text', Object.assign({}, current, { opacity: value }));
-  }
+      // Text component (fade always 0 → 1)
+      if (el.components && el.components.text) {
+        const current = el.getAttribute('text') || {};
+        el.setAttribute('text', Object.assign({}, current, { opacity: value }));
+      }
 
-  // Recurse into children
-  Array.from(el.children).forEach(child => this.setOpacityForEl(child, value));
-}
+      // Recurse into children
+      Array.from(el.children).forEach(child => this.setOpacityForEl(child, value));
+    }
   });
   </script>
 </head>
   
 <body>
+  <!-- Simple UI button -->
+  <div class="ui">
+    <button id="toggle-video-audio" type="button" aria-pressed="true" aria-label="Unmute video">Unmute video</button>
+  </div>
+
   <a-scene
     renderer="colorManagement: true; physicallyCorrectLights: true; toneMapping: ACESFilmic; exposure: 1.2"
     background="color: #c6ddf1"
@@ -157,6 +182,16 @@ setOpacityForEl(el, value) {
       <a-asset-item id="mdl-cristales" src="./assets/cristales_bacterias_2.glb"></a-asset-item>
       <a-asset-item id="planeta_museo_exterior" src="./assets/planeta_museo_central.glb"></a-asset-item>
       <a-asset-item id="mdl-techo_paredes_2" src="./assets/paredes_suelo_textura_museo.glb"></a-asset-item>
+
+      <!-- VIDEO ASSET (muted for autoplay) -->
+      <video id="museum-video"
+             src="./assets/purple_bacteria_screen_video.mp4"
+             loop
+             muted
+             playsinline
+             crossorigin="anonymous"
+             preload="auto">
+      </video>
     </a-assets>
 
     <a-sound id="bg-sound" src="./assets/music.mp3" autoplay="false" loop="true" volume="0.4" position="0 1.6 0"></a-sound>
@@ -195,6 +230,22 @@ setOpacityForEl(el, value) {
       </a-entity>
     </a-entity>
 
+    <!-- BIG SCREEN with the video -->
+    <!-- Positioned in front of the default forward (-Z) view; tweak as you like -->
+    <a-entity position="0 0 0">
+      <!-- Optional simple frame behind the video -->
+      <a-plane position="0 2 -2.02" width="3.6" height="2.1" color="#111" material="opacity: 0.6; transparent: true"></a-plane>
+      <!-- The actual video surface -->
+      <a-video id="video-screen"
+               src="#museum-video"
+               position="0 2 -2"
+               width="3.2"
+               height="1.8"
+               rotation="0 0 0"
+               material="shader: flat">
+      </a-video>
+    </a-entity>
+
     <a-entity gltf-model="#mdl-techo_paredes_2" position="0 6 10" scale="1 1 1" animation-mixer></a-entity>
 
     <!-- Cámara -->
@@ -215,7 +266,48 @@ setOpacityForEl(el, value) {
       sound.components.sound.playSound();
     }
   }
-  document.addEventListener("click", playSound);
+  document.addEventListener("click", playSound, { once: true });
+
+  // Ensure the video starts (muted autoplay should work; we also fall back to a user-gesture play)
+  const vid = document.getElementById('museum-video');
+  function tryPlayVideo() {
+    if (!vid) return;
+    const playPromise = vid.play();
+    if (playPromise && typeof playPromise.then === 'function') {
+      playPromise.catch(() => {/* ignore — will try again on user interaction */});
+    }
+  }
+  // Try on load…
+  if (vid) {
+    // iOS needs a touch/click sometimes; still attempt autoplay
+    tryPlayVideo();
+    // Also ensure it's playing after the first user interaction
+    const resume = () => { tryPlayVideo(); document.removeEventListener('click', resume); document.removeEventListener('touchend', resume); };
+    document.addEventListener('click', resume, { passive: true });
+    document.addEventListener('touchend', resume, { passive: true });
+  }
+
+  // Mute / Unmute toggle button
+  const btn = document.getElementById('toggle-video-audio');
+  function updateBtnLabel() {
+    if (!btn || !vid) return;
+    const isMuted = vid.muted || vid.volume === 0;
+    btn.textContent = isMuted ? 'Unmute video' : 'Mute video';
+    btn.setAttribute('aria-pressed', String(!isMuted));
+    btn.setAttribute('aria-label', isMuted ? 'Unmute video' : 'Mute video');
+  }
+  if (btn && vid) {
+    updateBtnLabel();
+    btn.addEventListener('click', () => {
+      // Make sure the video is playing (gesture guarantees audio unlock)
+      tryPlayVideo();
+      // Toggle mute
+      vid.muted = !vid.muted;
+      // If unmuting and volume is 0, set a sensible level
+      if (!vid.muted && vid.volume === 0) vid.volume = 0.8;
+      updateBtnLabel();
+    });
+  }
 
   // Texto largo asignado vía JS
   const txt = `Over three billion years ago, Earth was a very different place: young oceans, almost no oxygen, and layers of water where light filtered gently down. In that setting, life began to use sunlight in simple ways.
@@ -232,4 +324,3 @@ Much later came the cyanobacteria with the “modern” form of photosynthesis t
   </script>
 </body>
 </html>
-
