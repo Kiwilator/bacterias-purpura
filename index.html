@@ -278,11 +278,16 @@
 
     <a-entity gltf-model="#mdl-techo_paredes_2" position="0 6 10" scale="1 1 1" animation-mixer></a-entity>
 
-    <!-- Cámara -->
-    <a-entity id="rig" position="0 1.6 4" wasd-controls>
-      <!-- Mouse ray cursor works for desktop; in VR, default controller lasers will click too -->
-      <a-entity camera look-controls cursor="rayOrigin: mouse"></a-entity>
-    </a-entity>
+<!-- Cámara -->
+<a-entity id="rig" position="0 1.6 4">
+  <a-entity id="camera"
+            camera
+            look-controls
+            wasd-controls="acceleration: 50; fly: false"
+            cursor="rayOrigin: mouse">
+  </a-entity>
+</a-entity>
+
   </a-scene>
 
   <!-- ********************************* -->
@@ -327,3 +332,4 @@ Much later came the cyanobacteria with the “modern” form of photosynthesis t
   </script>
 </body>
 </html>
+
