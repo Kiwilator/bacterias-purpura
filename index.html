@@ -26,57 +26,30 @@
       this._opacity = 0;
       this._a = new THREE.Vector3();
       this._b = new THREE.Vector3();
-
-      // WeakMap to remember each node/material's base opacity
       this._base = new WeakMap();
-
       if (this.el.object3D) this.el.object3D.visible = true;
-
-      // Capture base opacities once so we can scale them
       this.captureBaseOpacities(this.el);
-
-      // Start invisible
       this.applyOpacity(0);
-
-      this.el.addEventListener('model-loaded', () => {
-        this.captureBaseOpacities(this.el);
-        this.applyOpacity(0);
-      });
-      this.el.addEventListener('object3dset', () => {
-        this.captureBaseOpacities(this.el);
-        this.applyOpacity(0);
-      });
+      this.el.addEventListener('model-loaded', () => { this.captureBaseOpacities(this.el); this.applyOpacity(0); });
+      this.el.addEventListener('object3dset',   () => { this.captureBaseOpacities(this.el); this.applyOpacity(0); });
     },
-
     tick(time, delta) {
       const t = this.data.target;
       if (!t || !t.object3D) return;
-
       this.el.object3D.getWorldPosition(this._a);
       t.object3D.getWorldPosition(this._b);
       const d = this._a.distanceTo(this._b);
-
       const goingIn = d <= this.data.distance;
       const step    = (delta / this.data.duration) * (goingIn ? 1 : -1);
       const next    = THREE.MathUtils.clamp(this._opacity + step, 0, 1);
-
-      if (next !== this._opacity) {
-        this._opacity = next;
-        this.applyOpacity(this._opacity);
-      }
+      if (next !== this._opacity) { this._opacity = next; this.applyOpacity(this._opacity); }
     },
-
-    // ---------- Helpers ----------
-
-    // Record the "base" opacity of everything under el once
     captureBaseOpacities(el) {
-      // For entity-level material component (e.g., <a-plane>)
       if (el.components && el.components.material) {
         const matAttr = el.getAttribute('material') || {};
         const base = (typeof matAttr.opacity === 'number') ? matAttr.opacity : 1;
         this._base.set(el, base);
       }
-      // For entity-level text component
       if (el.components && el.components.text) {
         const txtAttr = el.getAttribute('text') || {};
         const base = (typeof txtAttr.opacity === 'number') ? txtAttr.opacity : 1;
@@ -84,30 +57,22 @@
         el.__textBaseKey = key;
         this._base.set(key, base);
       }
-      // For mesh materials (GLTF, geometry)
       const mesh = el.getObject3D('mesh');
       if (mesh) {
         mesh.traverse(node => {
           if (node.isMesh && node.material) {
             const mats = Array.isArray(node.material) ? node.material : [node.material];
-            mats.forEach(m => {
-              if (!this._base.has(m)) this._base.set(m, (typeof m.opacity === 'number') ? m.opacity : 1);
-            });
+            mats.forEach(m => { if (!this._base.has(m)) this._base.set(m, (typeof m.opacity === 'number') ? m.opacity : 1); });
           }
         });
       }
-      // Recurse into children
       Array.from(el.children).forEach(child => this.captureBaseOpacities(child));
     },
-
-    // Apply scaled opacity = baseOpacity * value to el and its children
     applyOpacity(value) {
       this.setOpacityForEl(this.el, value);
       Array.from(this.el.children).forEach(child => this.setOpacityForEl(child, value));
     },
-
     setOpacityForEl(el, value) {
-      // Meshes
       const mesh = el.getObject3D('mesh');
       if (mesh) {
         mesh.traverse(node => {
@@ -124,32 +89,23 @@
           }
         });
       }
-
-      // Material component (e.g., <a-plane>)
       if (el.components && el.components.material) {
         const base = this._base.get(el) ?? 1;
         const v = base * value;
         el.setAttribute('material', 'transparent', v < 1 || base < 1);
         el.setAttribute('material', 'opacity', v);
       }
-
-      // Text component (fade always 0 → 1)
       if (el.components && el.components.text) {
         const current = el.getAttribute('text') || {};
         el.setAttribute('text', Object.assign({}, current, { opacity: value }));
       }
-
-      // Recurse into children
       Array.from(el.children).forEach(child => this.setOpacityForEl(child, value));
     }
   });
 
-  // In-world video audio toggle component (kept as-is)
+  // In-world video audio toggle component (unchanged behavior)
   AFRAME.registerComponent('video-audio-toggle', {
-    schema: {
-      video: { type: 'selector' },     // <video> asset element
-      label: { type: 'selector' }      // text entity to update
-    },
+    schema: { video: { type: 'selector' }, label: { type: 'selector' } },
     init() {
       this._onClick = this.onClick.bind(this);
       this._onEnter = () => this.el.setAttribute('material', 'opacity', 0.9);
@@ -163,13 +119,12 @@
       const v = this.data.video;
       if (!v) return;
       const p = v.play();
-      if (p && typeof p.then === 'function') p.catch(()=>{ /* ignore */ });
+      if (p && typeof p.then === 'function') p.catch(()=>{});
     },
     onClick() {
-      const v = this.data.video;
-      if (!v) return;
-      this.playVideo();        // ensure playing after a user gesture
-      v.muted = !v.muted;      // toggle
+      const v = this.data.video; if (!v) return;
+      this.playVideo();
+      v.muted = !v.muted;
       if (!v.muted && v.volume === 0) v.volume = 0.8;
       this.updateLabel();
     },
@@ -187,14 +142,14 @@
     }
   });
 
-  // In-world button to toggle visibility of an entity AND (optionally) play a sound once
+  // Toggle text visibility AND play/pause the pedestal voiceover with label update
   AFRAME.registerComponent('toggle-entity-visibility', {
     schema: {
-      target:  { type: 'selector' },  // entity to show/hide
-      label:   { type: 'selector' },  // label entity to update
-      sound:   { type: 'selector', default: null }, // <a-sound> to play once on "show"
-      showText:{ default: 'Play' },
-      hideText:{ default: 'Hide' }
+      target:   { type: 'selector' },          // entity to show/hide
+      label:    { type: 'selector' },          // label entity to update
+      sound:    { type: 'selector', default: null }, // <a-sound> to control
+      playText: { default: 'Play' },
+      pauseText:{ default: 'Pause' }
     },
     init() {
       this._onClick = this.onClick.bind(this);
@@ -203,30 +158,42 @@
       this.el.addEventListener('click', this._onClick);
       this.el.addEventListener('mouseenter', this._onEnter);
       this.el.addEventListener('mouseleave', this._onLeave);
-      this.updateLabel();
+      this.updateLabel(); // start as "Play"
     },
     onClick() {
       const t = this.data.target;
-      const s = this.data.sound;
+      const s = this.data.sound && this.data.sound.components ? this.data.sound.components.sound : null;
       if (!t) return;
-      const next = !(t.getAttribute('visible'));
-      t.setAttribute('visible', next);
-      // If showing, play sound once (no loop)
-      if (next && s && s.components && s.components.sound) {
-        try {
-          s.components.sound.stopSound(); // reset if was mid-play
-          s.components.sound.playSound();
-        } catch(e) {}
+
+      const visibleNow = !!t.getAttribute('visible');
+
+      if (visibleNow) {
+        // Hide and pause
+        t.setAttribute('visible', false);
+        if (s) { try { s.pauseSound(); } catch(e) {} }
+      } else {
+        // Show and play/resume (no loop)
+        t.setAttribute('visible', true);
+        if (s) {
+          try {
+            // If not currently playing, play (resumes if previously paused)
+            if (!s.isPlaying) s.playSound();
+          } catch(e) {}
+        }
       }
       this.updateLabel();
     },
     updateLabel() {
-      const t = this.data.target, label = this.data.label;
-      if (!label || !t) return;
-      const isVisible = !!t.getAttribute('visible');
-      const txt = isVisible ? this.data.hideText : this.data.showText;
+      const label = this.data.label;
+      const t = this.data.target;
+      const s = this.data.sound && this.data.sound.components ? this.data.sound.components.sound : null;
+      if (!label) return;
+      // If panel is visible AND (sound exists and isPlaying), show "Pause", else "Play"
+      const panelVisible = t ? !!t.getAttribute('visible') : false;
+      const playing = s ? !!s.isPlaying : false;
+      const nextText = (panelVisible && playing) ? this.data.pauseText : this.data.playText;
       const current = label.getAttribute('text') || {};
-      label.setAttribute('text', Object.assign({}, current, { value: txt }));
+      label.setAttribute('text', Object.assign({}, current, { value: nextText }));
     },
     remove() {
       this.el.removeEventListener('click', this._onClick);
@@ -284,42 +251,25 @@
 
     <!-- Pedestal bajo el planeta (SIEMPRE visible) -->
     <a-entity id="planet-pedestal" position="3 0 -2">
-      <!-- Base baja ancha -->
-      <a-cylinder position="0 0.05 0"
-                  radius="1.05"
-                  height="0.1"
-                  color="#7f8994"
-                  material="metalness: 0.2; roughness: 0.85">
-      </a-cylinder>
-      <!-- Cuerpo principal -->
-      <a-cylinder position="0 0.3 0"
-                  radius="0.9"
-                  height="0.5"
-                  color="#9aa3ad"
-                  material="metalness: 0.2; roughness: 0.6">
-      </a-cylinder>
-      <!-- Tapa superior fina -->
-      <a-cylinder position="0 0.58 0"
-                  radius="0.7"
-                  height="0.06"
-                  color="#cfd5db"
-                  material="metalness: 0.15; roughness: 0.4">
-      </a-cylinder>
+      <a-cylinder position="0 0.05 0" radius="1.05" height="0.1" color="#7f8994" material="metalness: 0.2; roughness: 0.85"></a-cylinder>
+      <a-cylinder position="0 0.3 0"  radius="0.9"  height="0.5" color="#9aa3ad" material="metalness: 0.2; roughness: 0.6"></a-cylinder>
+      <a-cylinder position="0 0.58 0" radius="0.7"  height="0.06" color="#cfd5db" material="metalness: 0.15; roughness: 0.4"></a-cylinder>
 
-      <!-- Voiceover sound (positional, plays once on Play) -->
+      <!-- Voiceover sound (positional). Louder and non-looping -->
       <a-sound id="planet-voice"
                src="#planet-voiceover"
                autoplay="false"
                loop="false"
                position="0 1 0"
-               volume="1.0"></a-sound>
+               volume="1.8">
+      </a-sound>
 
-      <!-- In-world PLAY button next to pedestal -->
+      <!-- In-world PLAY/PAUSE button next to pedestal -->
       <a-entity id="info-play-button" position="0 0.8 1" rotation="0 0 0">
         <a-plane width="1.2" height="0.45" color="#ffffff"
                  material="transparent: true; opacity: 0.7"
                  class="clickable"
-                 toggle-entity-visibility="target: #planet-text-group; label: #info-play-label; sound: #planet-voice; showText: Play; hideText: Hide">
+                 toggle-entity-visibility="target: #planet-text-group; label: #info-play-label; sound: #planet-voice; playText: Play; pauseText: Pause">
         </a-plane>
         <a-entity id="info-play-label"
                   position="0 0 0.01"
@@ -328,43 +278,26 @@
       </a-entity>
     </a-entity>
 
-    <!-- Texto + fondo (grupo) — controlado por PLAY (empieza oculto) -->
+    <!-- Texto + fondo (grupo) — controlado por el botón (empieza oculto) -->
     <a-entity id="planet-text-group"
               position="5 1.6 -0.2"
               rotation="0 -25 0"
               visible="false">
-      <a-plane id="planet-text-bg"
-               width="3.6" height="3.1"
-               color="#000000"
-               material="transparent: true; opacity: 0.4">
-      </a-plane>
-      <a-entity id="planet-text"
-                position="0 0.2 0.01"
-                text="value: ; align: left; wrapCount: 50; width: 3.5; color: #FFFFFF; opacity: 1">
-      </a-entity>
+      <a-plane id="planet-text-bg" width="3.6" height="3.1" color="#000000" material="transparent: true; opacity: 0.4"></a-plane>
+      <a-entity id="planet-text" position="0 0.2 0.01"
+                text="value: ; align: left; wrapCount: 50; width: 3.5; color: #FFFFFF; opacity: 1"></a-entity>
     </a-entity>
 
     <!-- BIG SCREEN with the video + in-world mute/unmute button -->
     <a-entity position="2.8 0 5" rotation="0 180 0">
       <a-plane position="0 3 -2.02" width="8.6" height="4.6" color="#111" material="opacity: 0.6; transparent: true"></a-plane>
-      <a-video id="video-screen"
-               src="#museum-video"
-               position="0 3 -2"
-               width="8"
-               height="4.2"
-               rotation="0 0 0"
-               material="shader: flat">
-      </a-video>
-
-      <!-- In-world mute/unmute button, placed to the lower-right of the screen -->
+      <a-video id="video-screen" src="#museum-video" position="0 3 -2" width="8" height="4.2" rotation="0 0 0" material="shader: flat"></a-video>
       <a-entity id="video-audio-button" position="3.9 0.8 -1.95" rotation="0 0 0">
-        <a-plane width="1.2" height="0.45" color="#ffffff" material="transparent: true; opacity: 0.7" 
+        <a-plane width="1.2" height="0.45" color="#ffffff" material="transparent: true; opacity: 0.7"
                  class="clickable"
                  video-audio-toggle="video: #museum-video; label: #video-audio-label"></a-plane>
-        <a-entity id="video-audio-label"
-                  position="0 0 0.01"
-                  text="value: Unmute; align: center; width: 2.2; color: #111; wrapCount: 20">
-        </a-entity>
+        <a-entity id="video-audio-label" position="0 0 0.01"
+                  text="value: Unmute; align: center; width: 2.2; color: #111; wrapCount: 20"></a-entity>
       </a-entity>
     </a-entity>
 
@@ -372,12 +305,7 @@
 
     <!-- Cámara (WASD + look on the SAME entity) -->
     <a-entity id="rig" position="0 1.6 4">
-      <a-entity id="camera"
-                camera
-                look-controls
-                wasd-controls="acceleration: 50; fly: false"
-                cursor="rayOrigin: mouse">
-      </a-entity>
+      <a-entity id="camera" camera look-controls wasd-controls="acceleration: 50; fly: false" cursor="rayOrigin: mouse"></a-entity>
     </a-entity>
   </a-scene>
 
@@ -400,7 +328,7 @@
   function tryPlayVideo() {
     if (!vid) return;
     const p = vid.play();
-    if (p && typeof p.then === 'function') p.catch(()=>{ /* ignore */ });
+    if (p && typeof p.then === 'function') p.catch(()=>{});
   }
   if (vid) {
     tryPlayVideo();
