@@ -186,10 +186,9 @@
         t.setAttribute('visible', true);
         if (soundCmp) {
           try {
-            // If ended or not playing yet, restart clean; else resume
             if (!soundCmp.isPlaying) {
-              soundCmp.stopSound();   // resets offset on all platforms
-              soundCmp.playSound();   // play from start
+              soundCmp.stopSound();
+              soundCmp.playSound();
             }
           } catch(e) {}
         }
@@ -214,32 +213,42 @@
     }
   });
 
-  // NEW: Color pulse (blue <-> purple) with fade-in each swap
-  AFRAME.registerComponent('pulse-color', {
+  /* ============================================
+     NEW: "Lava lamp" color drift for GLTF meshes
+     - Smoothly cycles hue within a range (blue→purple)
+     - Gentle variation in saturation and lightness
+     - Works on textured materials (multiplies base color)
+  ============================================ */
+  AFRAME.registerComponent('lava-lamp-color', {
     schema: {
-      colorA:   {default: '#2a66ff'}, // blue
-      colorB:   {default: '#8b3cff'}, // purple
-      interval: {default: 3000},      // ms between targets
-      fade:     {default: 800},       // ms fade time
-      affect:   {default: 'both'}     // 'color' | 'emissive' | 'both'
+      // Hue range [0..1] (HSL). Defaults ≈ blue (0.62) → purple (0.78).
+      hueMin:   {default: 0.62},
+      hueMax:   {default: 0.78},
+      // Base saturation/lightness and breathing amplitudes.
+      sat:      {default: 0.85},
+      light:    {default: 0.55},
+      satAmp:   {default: 0.10},  // ± around base
+      lightAmp: {default: 0.08},  // ± around base
+      // Overall animation speed (cycles per second-ish).
+      speed:    {default: 0.08},
+      // Emissive strength so it “reads” under dim light.
+      emissive: {default: 0.35},
+      // Optional opacity breathing (0 disables).
+      opacityBreath: {default: 0.0}
     },
     init() {
       this._materials = [];
-      this._colA = new THREE.Color(this.data.colorA);
-      this._colB = new THREE.Color(this.data.colorB);
-      this._from = this._colA.clone();
-      this._to   = this._colB.clone();
-      this._lastSwitch = 0;
-      this._fading = false;
-      this._fadeStart = 0;
-
       this.captureMaterials = this.captureMaterials.bind(this);
       this.applyColor = this.applyColor.bind(this);
 
       this.el.addEventListener('model-loaded', this.captureMaterials);
       this.el.addEventListener('object3dset', this.captureMaterials);
       this.captureMaterials();
-      this.applyColor(this._colA, 1.0); // start blue
+
+      // Prime initial color.
+      const c = new THREE.Color();
+      c.setHSL(this.data.hueMin, this.data.sat, this.data.light);
+      this.applyColor(c, 1.0);
     },
     captureMaterials() {
       this._materials.length = 0;
@@ -249,42 +258,50 @@
         if (n.isMesh && n.material) {
           const mats = Array.isArray(n.material) ? n.material : [n.material];
           mats.forEach(m => {
-            m.transparent = true;
+            m.transparent = true; // allow subtle opacity breathing
             m.needsUpdate = true;
             this._materials.push(m);
           });
         }
       });
     },
-    tick(time) {
+    // Small helper for smoother curves (easeInOut cubic-like)
+    _smooth(u){ return u*u*(3 - 2*u); },
+
+    tick(timeMs) {
       if (!this._materials.length) return;
 
-      if (!this._fading && (time - this._lastSwitch) >= this.data.interval) {
-        this._fading = true;
-        this._fadeStart = time;
-        this._lastSwitch = time;
-        const goingToB = this._to.equals(this._colA); // if last target was A, go to B
-        this._from.copy(goingToB ? this._colA : this._colB);
-        this._to.copy(goingToB ? this._colB : this._colA);
-      }
+      const t = (timeMs || 0) / 1000;
+      const d = this.data;
 
-      if (this._fading) {
-        const t = THREE.MathUtils.clamp((time - this._fadeStart) / this.data.fade, 0, 1);
-        const c = this._from.clone().lerp(this._to, t);
-        const op = 0.6 + 0.4 * t; // gentle fade-in
-        this.applyColor(c, op);
-        if (t >= 1) {
-          this._fading = false;
-          this.applyColor(this._to, 1.0);
-        }
-      }
+      // Blend a few sines with incommensurate frequencies to avoid repetition.
+      const w  = d.speed * Math.PI * 2;
+      const s1 = (Math.sin(w * t) + 1) * 0.5;            // 0..1
+      const s2 = (Math.sin(w * 0.63 * t + 1.7) + 1) * 0.5;
+      const s3 = (Math.sin(w * 0.41 * t - 0.9) + 1) * 0.5;
+      // Weighted mix and smoothstep-ish shaping
+      let uHue = this._smooth( (s1*0.60 + s2*0.25 + s3*0.15) );
+      const hue = THREE.MathUtils.lerp(d.hueMin, d.hueMax, uHue);
+
+      // Gentle breathing on saturation and lightness
+      const sat   = THREE.MathUtils.clamp(d.sat + d.satAmp   * (s2 - 0.5) * 2, 0, 1);
+      const light = THREE.MathUtils.clamp(d.light + d.lightAmp* (s3 - 0.5) * 2, 0, 1);
+
+      // Optional subtle opacity breathing
+      const op = d.opacityBreath > 0 ? THREE.MathUtils.clamp(1.0 - d.opacityBreath*0.5 + d.opacityBreath*0.5*Math.sin(w*0.33*t), 0.5, 1) : 1.0;
+
+      const color = new THREE.Color();
+      color.setHSL(hue, sat, light);
+
+      this.applyColor(color, op);
     },
     applyColor(color, opacity) {
-      const affectColor    = this.data.affect === 'color'    || this.data.affect === 'both';
-      const affectEmissive = this.data.affect === 'emissive' || this.data.affect === 'both';
+      const emissiveStrength = this.data.emissive;
       this._materials.forEach(m => {
-        if (affectColor && m.color) m.color.copy(color);
-        if (affectEmissive && m.emissive) m.emissive.copy(color).multiplyScalar(0.25);
+        if (m.color) m.color.copy(color);          // tint base/albedo
+        if (m.emissive) {
+          m.emissive.copy(color).multiplyScalar(emissiveStrength);
+        }
         if (typeof opacity === 'number') m.opacity = opacity;
         m.needsUpdate = true;
       });
@@ -357,13 +374,13 @@
               animation__float="property: position; dir: alternate; dur: 4000; easing: easeInOutSine; loop: true; to: 3 2.05 0">
     </a-entity>
 
-    <!-- Estatua Animación (now color-pulsing) -->
+    <!-- Estatua Animación (now with lava-lamp color drift) -->
     <a-entity id="animation_statue"
               gltf-model="#animacion_bacteria_color"
               position="0 2.6 -10.5"
               scale="1.8 1.8 1.8"
               shadow="cast: true; receive: true"
-              pulse-color="colorA: #2a66ff; colorB: #8b3cff; interval: 3000; fade: 800; affect: both">
+              lava-lamp-color="hueMin: 0.62; hueMax: 0.78; sat: 0.9; light: 0.55; satAmp: 0.12; lightAmp: 0.1; speed: 0.08; emissive: 0.35; opacityBreath: 0">
     </a-entity>
 
     <!-- Estatua Cilindro de Elixir -->
@@ -473,7 +490,6 @@
     const voice = document.querySelector('#planet-voice');
     if (voice && voice.components && voice.components.sound) {
       try {
-        // Start & immediately pause to prime buffer and unlock audio
         voice.components.sound.stopSound();
         voice.components.sound.playSound();
         voice.components.sound.pauseSound();
