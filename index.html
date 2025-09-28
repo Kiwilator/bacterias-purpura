@@ -227,6 +227,7 @@
       <a-asset-item id="planeta_museo_exterior" src="./assets/planeta_museo_central.glb"></a-asset-item>
       <a-asset-item id="mdl-techo_paredes_2" src="./assets/paredes_suelo_textura_museo.glb"></a-asset-item>
       <a-asset-item id="animacion_bacteria_color" src="./assets/ANIMACION_bacteria_color_2.glb"></a-asset-item>
+      <a-asset-item id="Purple_Elixir_Cylinder" src="./assets/Purple_Elixir_Cylinder.glb"></a-asset-item>
 
       <!-- VIDEO ASSET (muted for autoplay) -->
       <video id="museum-video"
@@ -279,6 +280,14 @@
     <a-entity id="animation_statue"
               gltf-model="#animacion_bacteria_color"
               position="0 2 -11"
+              scale="1 1 1"
+              shadow="cast: true; receive: true">
+    </a-entity>
+
+    <!-- Estatua Cilindro de Elixir -->
+    <a-entity id="Elixir_Cylinder"
+              gltf-model="#Purple_Elixir_Cylinder"
+              position="-4 2 -11"
               scale="1 1 1"
               shadow="cast: true; receive: true">
     </a-entity>
@@ -420,6 +429,7 @@ Much later came the cyanobacteria with the “modern” form of photosynthesis t
   </script>
 </body>
 </html>
+
 
 
 
