@@ -213,6 +213,87 @@
       this.el.removeEventListener('mouseleave', this._onLeave);
     }
   });
+
+  // NEW: Color pulse (blue <-> purple) with fade-in each swap
+  AFRAME.registerComponent('pulse-color', {
+    schema: {
+      colorA:   {default: '#2a66ff'}, // blue
+      colorB:   {default: '#8b3cff'}, // purple
+      interval: {default: 3000},      // ms between targets
+      fade:     {default: 800},       // ms fade time
+      affect:   {default: 'both'}     // 'color' | 'emissive' | 'both'
+    },
+    init() {
+      this._materials = [];
+      this._colA = new THREE.Color(this.data.colorA);
+      this._colB = new THREE.Color(this.data.colorB);
+      this._from = this._colA.clone();
+      this._to   = this._colB.clone();
+      this._lastSwitch = 0;
+      this._fading = false;
+      this._fadeStart = 0;
+
+      this.captureMaterials = this.captureMaterials.bind(this);
+      this.applyColor = this.applyColor.bind(this);
+
+      this.el.addEventListener('model-loaded', this.captureMaterials);
+      this.el.addEventListener('object3dset', this.captureMaterials);
+      this.captureMaterials();
+      this.applyColor(this._colA, 1.0); // start blue
+    },
+    captureMaterials() {
+      this._materials.length = 0;
+      const mesh = this.el.getObject3D('mesh');
+      if (!mesh) return;
+      mesh.traverse(n => {
+        if (n.isMesh && n.material) {
+          const mats = Array.isArray(n.material) ? n.material : [n.material];
+          mats.forEach(m => {
+            m.transparent = true;
+            m.needsUpdate = true;
+            this._materials.push(m);
+          });
+        }
+      });
+    },
+    tick(time) {
+      if (!this._materials.length) return;
+
+      if (!this._fading && (time - this._lastSwitch) >= this.data.interval) {
+        this._fading = true;
+        this._fadeStart = time;
+        this._lastSwitch = time;
+        const goingToB = this._to.equals(this._colA); // if last target was A, go to B
+        this._from.copy(goingToB ? this._colA : this._colB);
+        this._to.copy(goingToB ? this._colB : this._colA);
+      }
+
+      if (this._fading) {
+        const t = THREE.MathUtils.clamp((time - this._fadeStart) / this.data.fade, 0, 1);
+        const c = this._from.clone().lerp(this._to, t);
+        const op = 0.6 + 0.4 * t; // gentle fade-in
+        this.applyColor(c, op);
+        if (t >= 1) {
+          this._fading = false;
+          this.applyColor(this._to, 1.0);
+        }
+      }
+    },
+    applyColor(color, opacity) {
+      const affectColor    = this.data.affect === 'color'    || this.data.affect === 'both';
+      const affectEmissive = this.data.affect === 'emissive' || this.data.affect === 'both';
+      this._materials.forEach(m => {
+        if (affectColor && m.color) m.color.copy(color);
+        if (affectEmissive && m.emissive) m.emissive.copy(color).multiplyScalar(0.25);
+        if (typeof opacity === 'number') m.opacity = opacity;
+        m.needsUpdate = true;
+      });
+    },
+    remove() {
+      this.el.removeEventListener('model-loaded', this.captureMaterials);
+      this.el.removeEventListener('object3dset', this.captureMaterials);
+    }
+  });
   </script>
 </head>
   
@@ -276,12 +357,13 @@
               animation__float="property: position; dir: alternate; dur: 4000; easing: easeInOutSine; loop: true; to: 3 2.05 0">
     </a-entity>
 
-    <!-- Estatua Animación -->
+    <!-- Estatua Animación (now color-pulsing) -->
     <a-entity id="animation_statue"
               gltf-model="#animacion_bacteria_color"
               position="0 2.6 -10.5"
               scale="1.8 1.8 1.8"
-              shadow="cast: true; receive: true">
+              shadow="cast: true; receive: true"
+              pulse-color="colorA: #2a66ff; colorB: #8b3cff; interval: 3000; fade: 800; affect: both">
     </a-entity>
 
     <!-- Estatua Cilindro de Elixir -->
@@ -429,17 +511,3 @@ Much later came the cyanobacteria with the “modern” form of photosynthesis t
   </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
