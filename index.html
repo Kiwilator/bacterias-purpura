@@ -341,6 +341,7 @@
       <!-- VOICEOVER AUDIO ASSETS -->
       <audio id="planet-voiceover" src="./assets/planet_voiceover_01.mp3" preload="auto"></audio>
       <audio id="museum-voiceover-1" src="./assets/museum_voiceover_1.mpeg" preload="auto"></audio>
+      <audio id="museum-voiceover-2" src="./assets/museum_voiceover_2.mpeg" preload="auto"></audio>
     </a-assets>
 
     <!-- Global lights — darker mood -->
@@ -384,6 +385,42 @@
               shadow="cast: true; receive: true"
               lava-lamp-color="hueMin: 0.62; hueMax: 0.78; sat: 0.9; light: 0.55; satAmp: 0.12; lightAmp: 0.1; speed: 0.08; emissive: 0.35; opacityBreath: 0">
     </a-entity>
+
+    <!-- NEW: Statue voiceover, text group and Play button -->
+    <a-sound id="statue-voice"
+             src="#museum-voiceover-2"
+             autoplay="false"
+             loop="false"
+             position="0 2.2 -10.5"
+             volume="1.8">
+    </a-sound>
+
+    <a-entity id="statue-text-group"
+              position="-2.1 2.1 -10.7"
+              rotation="0 10 0"
+              visible="false"
+              shadow="receive: true">
+      <a-plane width="3.8" height="3.8" color="#000000"
+               material="transparent: true; opacity: 0.45"></a-plane>
+      <a-entity id="statue-text"
+                position="0 0 0.01"
+                text="value: ; align: left; wrapCount: 52; width: 3.6; color: #FFFFFF; opacity: 1">
+      </a-entity>
+    </a-entity>
+
+    <a-entity id="statue-play-button" position="0 1.2 -9.0" rotation="0 0 0">
+      <a-plane width="1.2" height="0.45" color="#ffffff"
+               material="transparent: true; opacity: 0.7"
+               class="clickable"
+               toggle-entity-visibility="target: #statue-text-group; label: #statue-play-label; sound: #statue-voice; playText: Play; pauseText: Pause"
+               shadow="receive: true">
+      </a-plane>
+      <a-entity id="statue-play-label"
+                position="0 0 0.01"
+                text="value: Play; align: center; width: 2.2; color: #111; wrapCount: 20">
+      </a-entity>
+    </a-entity>
+    <!-- /NEW statue block -->
 
     <!-- Estatua Cilindro de Elixir -->
     <a-entity id="Elixir_Cylinder"
@@ -551,6 +588,15 @@
         elixirVoice.components.sound.pauseSound();
       } catch(e) {}
     }
+    // Prime statue voice (NEW)
+    const statueVoice = document.querySelector('#statue-voice');
+    if (statueVoice && statueVoice.components && statueVoice.components.sound) {
+      try {
+        statueVoice.components.sound.stopSound();
+        statueVoice.components.sound.playSound();
+        statueVoice.components.sound.pauseSound();
+      } catch(e) {}
+    }
   }
   document.addEventListener('click', unlockAndPrimeVoice, { once: true, passive: true });
   document.addEventListener('touchend', unlockAndPrimeVoice, { once: true, passive: true });
@@ -590,7 +636,20 @@ In practice, they are grown in photobioreactors: illuminated vessels where light
     const current = elixirTextEl.getAttribute('text') || {};
     elixirTextEl.setAttribute('text', Object.assign({}, current, { value: elixirTxt }));
   }
+
+  // Statue text (NEW)
+  const statueTxt = `Why purple bacteria change colour
+
+The colour of these bacteria depends on their pigment mix. They contain bacteriochlorophylls, which harvest light and push the tone towards purples/magenta, and carotenoids, which act as photoprotection and add oranges and reds. It isn’t a fixed dye: the cell adjusts how much of each pigment it makes according to its environment—like moving sliders on an equaliser. How those pigments are packed into the light-harvesting complexes also shapes what we see.
+
+Environment drives the shift. Under strong light, cells boost carotenoids as a “sunshade”, and the culture shifts orange, salmon or reddish. Under low light, they increase bacteriochlorophyll and the photosynthetic machinery, and the tone becomes a deeper purple. Oxygen matters too: purple non-sulphur bacteria (e.g., Rhodobacter and Rhodopseudomonas) turn their photosynthetic apparatus on in low-oxygen conditions and look vivid; with aeration, they dial it down and may appear beige. In purple sulphur bacteria, intracellular sulphur granules scatter light and can mute the violet towards browns as granules appear or disappear.
+
+The palette is broad and varies by species and growth stage: pale pink, rose, magenta, violet, and also orange to brick-red or brown when carotenoids dominate or sulphur is present. Nutrients, culture age and temperature fine-tune the shade. In short, the colour isn’t paint—it’s metabolism adapting to light and oxygen—so it works as a simple visual “thermometer” of how these bacteria are operating.`;
+  const statueTextEl = document.querySelector('#statue-text');
+  if (statueTextEl) {
+    const current = statueTextEl.getAttribute('text') || {};
+    statueTextEl.setAttribute('text', Object.assign({}, current, { value: statueTxt }));
+  }
   </script>
 </body>
 </html>
-
